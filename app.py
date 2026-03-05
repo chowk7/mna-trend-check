@@ -4,7 +4,6 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from article_scraper import scrape_articles_batch
 from news_fetcher import fetch_articles, DEFAULT_KEYWORDS
 from secret_manager import get_gemini_api_key
 from summarizer import summarize_article
@@ -174,9 +173,9 @@ def main():
         # Gemini 모델 선택
         model_choice = st.selectbox(
             "Gemini 모델",
-            options=["gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+            options=["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
             index=0,
-            help="2.5 Pro는 최신 고품질 모델, Flash는 빠르고 저렴합니다.",
+            help="url_context 도구는 Gemini 2.0 이상에서만 지원됩니다.",
         )
 
         summarize_clicked = st.button("✨ 선택된 기사 요약", type="primary", use_container_width=True)
@@ -194,27 +193,20 @@ def main():
                     st.error(f"API 키 로딩 실패: {e}")
                     return
 
-                progress = st.progress(0, text="Playwright 브라우저 시작 중...")
-                urls_to_scrape = [a["url"] for a in selected]
-                scraped = scrape_articles_batch(urls_to_scrape)
-                progress.progress(0.4, text=f"기사 {len(selected)}건 수집 완료. 요약 중...")
+                progress = st.progress(0, text="요약 준비 중...")
 
                 for idx, article in enumerate(selected):
-                    article_text = scraped.get(article["url"])
-                    if article_text is None:
-                        st.session_state.summaries[article["url"]] = "[스크래핑 실패: 기사 본문을 가져올 수 없습니다.]"
-                    else:
-                        progress.progress(
-                            0.4 + 0.6 * idx / len(selected),
-                            text=f"요약 중... ({idx + 1}/{len(selected)}): {article['title'][:40]}..."
-                        )
-                        summary = summarize_article(
-                            article_text=article_text,
-                            custom_format=custom_format,
-                            api_key=api_key,
-                            model=model_choice,
-                        )
-                        st.session_state.summaries[article["url"]] = summary
+                    progress.progress(
+                        idx / len(selected),
+                        text=f"요약 중... ({idx + 1}/{len(selected)}): {article['title'][:40]}..."
+                    )
+                    summary = summarize_article(
+                        url=article["url"],
+                        custom_format=custom_format,
+                        api_key=api_key,
+                        model=model_choice,
+                    )
+                    st.session_state.summaries[article["url"]] = summary
 
                 progress.progress(1.0, text="완료!")
 
