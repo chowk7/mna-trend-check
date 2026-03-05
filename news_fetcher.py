@@ -8,10 +8,7 @@ import feedparser
 logger = logging.getLogger(__name__)
 
 # M&A 관련 기본 검색 키워드 (영어)
-DEFAULT_KEYWORDS = (
-    "merger OR acquisition OR divest OR divestiture"
-    ' OR "joint venture" OR JV OR investment OR M&A'
-)
+DEFAULT_KEYWORDS = '"to acquire" OR "to divest" OR "joint venture"'
 
 _RSS_BASE = "https://news.google.com/rss/search"
 
@@ -38,9 +35,9 @@ def fetch_articles(
     query = f"{search_query} after:{after_str} before:{before_str}"
     params = urllib.parse.urlencode({
         "q": query,
-        "hl": "ko",
-        "gl": "KR",
-        "ceid": "KR:ko",
+        "hl": "en",
+        "gl": "US",
+        "ceid": "US:en",
     })
     url = f"{_RSS_BASE}?{params}"
     logger.info("Fetching RSS: %s", url)
@@ -80,8 +77,21 @@ def fetch_articles(
         if len(articles) >= max_results:
             break
 
+    # 영어 기사(ASCII 위주 제목)를 먼저 정렬
+    articles.sort(key=lambda a: _is_non_english(a["title"]))
+
     logger.info("총 %d개 기사 수집 완료", len(articles))
     return articles
+
+
+def _is_non_english(text: str) -> bool:
+    """한글/한자 등 비영어 문자가 포함되면 True (정렬용)."""
+    import unicodedata
+    for ch in text:
+        cat = unicodedata.category(ch)
+        if cat.startswith("L") and ord(ch) > 127:
+            return True
+    return False
 
 
 def _parse_published(entry) -> datetime | None:

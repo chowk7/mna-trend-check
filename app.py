@@ -174,9 +174,9 @@ def main():
         # Gemini 모델 선택
         model_choice = st.selectbox(
             "Gemini 모델",
-            options=["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash"],
+            options=["gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
             index=0,
-            help="Flash는 빠르고 저렴, Pro는 품질이 높습니다.",
+            help="2.5 Pro는 최신 고품질 모델, Flash는 빠르고 저렴합니다.",
         )
 
         summarize_clicked = st.button("✨ 선택된 기사 요약", type="primary", use_container_width=True)
@@ -233,7 +233,8 @@ def main():
                     continue
                 summary = st.session_state.summaries[url]
 
-                with st.expander(f"📄 {article['title']}", expanded=True):
+                date_label = f"[{article['published']}] " if article["published"] else ""
+                with st.expander(f"📄 {date_label}{article['title']}", expanded=True):
                     st.markdown(summary)
                     col_copy, col_link = st.columns([1, 1])
                     with col_link:
