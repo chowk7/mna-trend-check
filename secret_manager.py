@@ -1,7 +1,32 @@
 import os
 
+import google.auth
+import google.auth.exceptions
 from google.api_core.exceptions import NotFound, PermissionDenied
 from google.cloud import secretmanager
+
+
+def _resolve_project_id(project_id: str | None) -> str:
+    """GCP_PROJECT_ID 환경변수 → google.auth.default() 순서로 프로젝트 ID 반환."""
+    if project_id:
+        return project_id
+
+    env_id = os.environ.get("GCP_PROJECT_ID")
+    if env_id:
+        return env_id
+
+    try:
+        _, detected = google.auth.default()
+        if detected:
+            return detected
+    except google.auth.exceptions.DefaultCredentialsError:
+        pass
+
+    raise EnvironmentError(
+        "GCP 프로젝트 ID를 확인할 수 없습니다. "
+        "GCP_PROJECT_ID 환경변수를 설정하거나 "
+        "gcloud auth application-default login을 실행하세요."
+    )
 
 
 def get_gemini_api_key(
@@ -10,8 +35,8 @@ def get_gemini_api_key(
     version: str = "latest",
 ) -> str:
     """GCP Secret Manager에서 Gemini API 키를 가져옵니다."""
-    project_id = project_id or os.environ.get("GCP_PROJECT_ID")
-    secret_id = secret_id or os.environ.get("GEMINI_SECRET_ID", "gemini-api-key")
+    project_id = _resolve_project_id(project_id)
+    secret_id = secret_id or os.environ.get("GEMINI_SECRET_ID", "google-api-key")
 
     if not project_id:
         raise EnvironmentError(

@@ -7,12 +7,10 @@ import feedparser
 
 logger = logging.getLogger(__name__)
 
-# M&A 관련 검색 키워드 (한국어 + 영어)
-_SEARCH_QUERY = (
-    "인수합병 OR 기업인수 OR 기업매각 OR 지분투자"
-    " OR merger OR acquisition OR divest OR divestiture"
-    " OR \"joint venture\" OR JV OR investment"
-    " OR M&A"
+# M&A 관련 기본 검색 키워드 (영어)
+DEFAULT_KEYWORDS = (
+    "merger OR acquisition OR divest OR divestiture"
+    ' OR "joint venture" OR JV OR investment OR M&A'
 )
 
 _RSS_BASE = "https://news.google.com/rss/search"
@@ -22,18 +20,22 @@ def fetch_articles(
     after_date: date,
     before_date: date,
     max_results: int = 50,
+    keywords: str | None = None,
 ) -> list[dict]:
     """
     Google News RSS에서 M&A 관련 기사를 가져옵니다.
+
+    Args:
+        keywords: 검색 키워드 문자열. None이면 DEFAULT_KEYWORDS 사용.
 
     Returns:
         list of dicts with keys: title, url, published, published_dt, snippet, source
     """
     after_str = after_date.strftime("%Y-%m-%d")
-    # before 날짜는 포함하기 위해 +1일
     before_str = before_date.strftime("%Y-%m-%d")
 
-    query = f"{_SEARCH_QUERY} after:{after_str} before:{before_str}"
+    search_query = (keywords.strip() if keywords and keywords.strip() else DEFAULT_KEYWORDS)
+    query = f"{search_query} after:{after_str} before:{before_str}"
     params = urllib.parse.urlencode({
         "q": query,
         "hl": "ko",

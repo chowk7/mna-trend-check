@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import streamlit as st
 
 from article_scraper import scrape_article
-from news_fetcher import fetch_articles
+from news_fetcher import fetch_articles, DEFAULT_KEYWORDS
 from secret_manager import get_gemini_api_key
 from summarizer import summarize_article
 
@@ -94,10 +94,21 @@ def main():
 
         max_results = st.slider("최대 기사 수", min_value=10, max_value=100, value=30, step=10)
 
-        search_clicked = st.button("🔍 뉴스 검색", use_container_width=True, type="primary")
-
         st.divider()
-        st.caption("M&A 관련 키워드로 Google 뉴스를 검색합니다.\n포함 키워드: 인수합병, 기업인수, 기업매각, 지분투자, merger, acquisition, divest, joint venture, JV, investment")
+        st.markdown("**검색 키워드**")
+        custom_keywords = st.text_area(
+            "검색 키워드 (OR로 연결)",
+            value=DEFAULT_KEYWORDS,
+            height=120,
+            help=(
+                "Google News 검색에 사용할 키워드를 입력하세요.\n"
+                "OR로 여러 키워드를 연결할 수 있습니다.\n"
+                '예: merger OR acquisition OR "joint venture"'
+            ),
+            label_visibility="collapsed",
+        )
+
+        search_clicked = st.button("🔍 뉴스 검색", use_container_width=True, type="primary")
 
     # ── 날짜 유효성 검사 ────────────────────────────────────────────────────
     if start_date > end_date:
@@ -108,7 +119,7 @@ def main():
     if search_clicked:
         st.session_state.summaries = {}  # 이전 요약 초기화
         with st.spinner(f"{start_date} ~ {end_date} M&A 뉴스 검색 중..."):
-            articles = fetch_articles(start_date, end_date, max_results)
+            articles = fetch_articles(start_date, end_date, max_results, keywords=custom_keywords)
         st.session_state.articles = articles
 
         if not articles:
