@@ -16,9 +16,11 @@ _HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate",
     "Connection": "keep-alive",
+    # Google 동의 페이지 우회 쿠키
+    "Cookie": "CONSENT=YES+cb; SOCS=CAISHAgBEhJnd3NfMjAyMzA4MDktMF9SQzEaAmVuIAEaBgiAo_SnBg",
 }
 
 _PAYWALL_PHRASES = [
@@ -58,12 +60,24 @@ def scrape_article(url: str, timeout: int = _TIMEOUT) -> str | None:
         logger.warning("HTTP 오류 %s: %s", e.response.status_code, url)
         return None
 
+    if _is_google_page(resp.url, resp.text):
+        logger.warning("Google 동의/개인정보 페이지 감지, 스크래핑 불가: %s → %s", url, resp.url)
+        return None
+
     text = _extract_text(resp.text, resp.url)
 
     if _is_paywall(text):
         return "[페이월: 전체 기사에 접근할 수 없습니다. 구독이 필요할 수 있습니다.]"
 
     return text[:_MAX_CHARS] if text else None
+
+
+def _is_google_page(final_url: str, html: str) -> bool:
+    """Google 동의/개인정보 페이지 여부 감지."""
+    if "google.com" not in final_url:
+        return False
+    lower = html.lower()
+    return "consent" in lower or ("privacy" in lower and "cookie" in lower)
 
 
 def _extract_text(html: str, url: str) -> str:

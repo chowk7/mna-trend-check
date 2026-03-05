@@ -67,7 +67,7 @@ def fetch_articles(
 
         articles.append({
             "title": entry.get("title", "제목 없음"),
-            "url": entry.get("link", ""),
+            "url": _get_real_url(entry),
             "published": pub_dt.strftime("%Y-%m-%d") if pub_dt else "",
             "published_dt": pub_dt,
             "snippet": _clean_snippet(entry.get("summary", "")),
@@ -82,6 +82,21 @@ def fetch_articles(
 
     logger.info("총 %d개 기사 수집 완료", len(articles))
     return articles
+
+
+def _get_real_url(entry) -> str:
+    """Google News 추적 URL 대신 실제 기사 URL 반환 시도."""
+    # entry.links에서 google.com이 아닌 링크 탐색
+    for link in getattr(entry, "links", []):
+        href = link.get("href", "")
+        if href and "google.com" not in href and href.startswith("http"):
+            return href
+    # entry.source.href
+    src = getattr(entry, "source", None)
+    if src and hasattr(src, "href") and "google.com" not in getattr(src, "href", ""):
+        return src.href
+    # 폴백: Google 추적 URL
+    return entry.get("link", "")
 
 
 def _is_non_english(text: str) -> bool:
