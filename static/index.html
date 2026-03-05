@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>M&amp;A 뉴스 요약기</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>M&amp;A 뉴스 요약기</h1>
+  </header>
+
+  <main class="layout">
+    <!-- ── 사이드바 ── -->
+    <aside class="sidebar">
+      <section class="panel" id="search-panel">
+        <h2>검색 설정</h2>
+
+        <div class="form-group">
+          <label for="date-from">시작 날짜</label>
+          <input type="date" id="date-from" />
+        </div>
+
+        <div class="form-group">
+          <label for="date-to">종료 날짜</label>
+          <input type="date" id="date-to" />
+        </div>
+
+        <div class="form-group">
+          <label for="max-results">최대 기사 수</label>
+          <input type="number" id="max-results" value="30" min="10" max="100" step="10" />
+        </div>
+
+        <div class="form-group">
+          <label for="keywords">검색 키워드</label>
+          <textarea id="keywords" rows="4"></textarea>
+          <small>OR로 여러 키워드 연결 가능</small>
+        </div>
+
+        <button id="btn-search" class="btn btn-primary btn-block">뉴스 검색</button>
+      </section>
+    </aside>
+
+    <!-- ── 메인 콘텐츠 ── -->
+    <section class="content">
+
+      <!-- 오류 배너 -->
+      <div id="error-banner" class="error-banner" hidden></div>
+
+      <!-- 기사 목록 패널 -->
+      <div id="article-panel" hidden>
+        <div class="panel-header">
+          <h2 id="article-count"></h2>
+          <div class="select-controls">
+            <button id="btn-select-all" class="btn btn-sm">전체 선택</button>
+            <button id="btn-select-none" class="btn btn-sm">전체 해제</button>
+          </div>
+        </div>
+        <ul id="article-list" class="article-list"></ul>
+      </div>
+
+      <!-- 요약 설정 패널 -->
+      <div id="summary-panel" class="panel" hidden>
+        <h2>요약 양식 설정</h2>
+
+        <div class="form-group">
+          <label for="format-template">예시 양식 및 규칙</label>
+          <textarea id="format-template" rows="18"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="model-select">Gemini 모델</label>
+          <select id="model-select">
+            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+            <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+            <option value="gemini-2.0-flash" selected>gemini-2.0-flash</option>
+          </select>
+        </div>
+
+        <button id="btn-summarize" class="btn btn-primary btn-block">선택된 기사 요약</button>
+
+        <div id="progress-area" hidden>
+          <progress id="progress-bar" value="0" max="100"></progress>
+          <p id="progress-text" class="progress-text"></p>
+        </div>
+      </div>
+
+      <!-- 요약 결과 패널 -->
+      <div id="results-panel" hidden>
+        <div class="panel-header">
+          <h2>요약 결과</h2>
+          <button id="btn-download" class="btn btn-sm">전체 요약 다운로드 (txt)</button>
+        </div>
+        <div id="summaries-container"></div>
+      </div>
+
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
