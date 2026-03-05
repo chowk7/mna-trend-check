@@ -382,6 +382,46 @@ progress::-moz-progress-bar { background: #3b82f6; border-radius: 4px; }
   font-size: 0.88rem;
 }
 
+/* ── Direct input panel ── */
+.label-optional {
+  font-weight: 400;
+  color: #a0aec0;
+  font-size: 0.75rem;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.input-hint {
+  font-size: 0.78rem;
+  color: #718096;
+  margin-bottom: 0.5rem;
+}
+
+.progress-text--inline {
+  margin-top: 0.4rem;
+}
+
+/* Direct input badge on summary card */
+.summary-card--direct > summary {
+  background: #f0fff4;
+  border-left: 3px solid #48bb78;
+}
+
+.summary-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+.summary-badge--direct {
+  background: #c6f6d5;
+  color: #276749;
+}
+
 /* ── Loading spinner on button ── */
 .btn.loading::after {
   content: "";

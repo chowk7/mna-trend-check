@@ -6,7 +6,7 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from news_fetcher import DEFAULT_KEYWORDS, fetch_articles
 from secret_manager import get_gemini_api_key
-from summarizer import summarize_article
+from summarizer import summarize_article, summarize_text
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -71,6 +71,33 @@ def api_summarize():
 
     # summarize_article never raises — always returns a string
     summary = summarize_article(url, custom_format, api_key, model)
+    return jsonify({"summary": summary})
+
+
+@app.route("/api/summarize-direct", methods=["POST"])
+def api_summarize_direct():
+    """URL 또는 텍스트를 직접 받아 요약. 둘 다 제공된 경우 텍스트 우선."""
+    body = request.get_json(force=True)
+    url = body.get("url", "").strip()
+    text = body.get("text", "").strip()
+    custom_format = body.get("custom_format", "")
+    model = body.get("model", "gemini-2.0-flash")
+
+    if not url and not text:
+        return jsonify({"error": "url 또는 text 중 하나 이상 입력해 주세요."}), 400
+
+    try:
+        api_key = get_api_key()
+    except Exception as e:
+        return jsonify({"error": f"API 키 로딩 실패: {e}"}), 500
+
+    if text:
+        # 텍스트가 있으면 직접 Gemini에 전달
+        summary = summarize_text(text, custom_format, api_key, model)
+    else:
+        # URL만 있으면 url_context 사용
+        summary = summarize_article(url, custom_format, api_key, model)
+
     return jsonify({"summary": summary})
 
 

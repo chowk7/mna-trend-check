@@ -33,8 +33,9 @@ const DEFAULT_FORMAT = `[예시 1번]
 
 // ── App state ─────────────────────────────────────────────────────────────────
 
-let articles = [];   // [{title, url, published, snippet, source}, ...]
-let summaries = {};  // { url: summaryString }
+let articles = [];      // [{title, url, published, snippet, source}, ...]
+let summaries = {};     // { url: summaryString }
+let directItems = [];   // [{label, url, summary}] — results from direct input
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -142,7 +143,6 @@ function renderArticleList() {
   if (articles.length === 0) {
     showError('해당 기간에 검색된 M&A 뉴스가 없습니다. 날짜 범위를 넓혀보세요.');
     $('article-panel').hidden = true;
-    $('summary-panel').hidden = true;
     return;
   }
 
@@ -200,7 +200,6 @@ function renderArticleList() {
 
   $('article-count').textContent = `검색된 기사 목록 (${articles.length}건)`;
   $('article-panel').hidden = false;
-  $('summary-panel').hidden = false;
 }
 
 function handleSelectAll() {
@@ -310,13 +309,105 @@ function renderSummary(article, summaryText) {
   container.appendChild(details);
 }
 
+// ── Direct input summarize ────────────────────────────────────────────────────
+
+async function handleDirectSummarize() {
+  hideError();
+
+  const url = $('direct-url').value.trim();
+  const text = $('direct-text').value.trim();
+
+  if (!url && !text) {
+    showError('URL 또는 기사 내용 중 하나 이상 입력해 주세요.');
+    return;
+  }
+
+  const customFormat = $('format-template').value;
+  const model = $('model-select').value;
+
+  const btn = $('btn-direct-summarize');
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.textContent = '요약 중...';
+
+  const progressEl = $('direct-progress');
+  const progressText = $('direct-progress-text');
+  progressEl.hidden = false;
+  progressText.textContent = 'Gemini 요약 중...';
+
+  // Build a display label
+  const label = url || (text.slice(0, 60) + (text.length > 60 ? '...' : ''));
+
+  try {
+    const data = await apiFetch('/api/summarize-direct', { url, text, custom_format: customFormat, model });
+    const item = { label, url, summary: data.summary };
+    directItems.push(item);
+    renderDirectSummary(item);
+    $('results-panel').hidden = false;
+    progressText.textContent = '완료!';
+    // Clear inputs after success
+    $('direct-url').value = '';
+    $('direct-text').value = '';
+  } catch (err) {
+    progressText.textContent = '';
+    showError(`요약 오류: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    btn.textContent = '요약';
+    setTimeout(() => { progressEl.hidden = true; }, 3000);
+  }
+}
+
+function renderDirectSummary(item) {
+  const container = $('summaries-container');
+
+  const details = document.createElement('details');
+  details.className = 'summary-card summary-card--direct';
+  details.open = true;
+
+  const summaryEl = document.createElement('summary');
+  const badge = document.createElement('span');
+  badge.className = 'summary-badge summary-badge--direct';
+  badge.textContent = '직접 입력';
+  summaryEl.appendChild(badge);
+  summaryEl.appendChild(document.createTextNode(item.label));
+  details.appendChild(summaryEl);
+
+  const body = document.createElement('div');
+  body.className = 'summary-body' + (item.summary.startsWith('[오류') ? ' error' : '');
+  body.textContent = item.summary;
+  details.appendChild(body);
+
+  if (item.url) {
+    const footer = document.createElement('div');
+    footer.className = 'summary-footer';
+    const link = document.createElement('a');
+    link.href = item.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = '기사 원문 보기 →';
+    footer.appendChild(link);
+    details.appendChild(footer);
+  }
+
+  container.appendChild(details);
+}
+
 // ── Download ──────────────────────────────────────────────────────────────────
 
 function handleDownload() {
   let text = '';
+
+  // Search-result summaries
   articles.forEach(a => {
     if (!summaries[a.url]) return;
     text += `## ${a.title}\n${summaries[a.url]}\n\n---\n\n`;
+  });
+
+  // Direct-input summaries
+  directItems.forEach(item => {
+    text += `## [직접 입력] ${item.label}\n${item.summary}\n\n---\n\n`;
   });
 
   if (!text) return;
@@ -343,6 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-select-all').addEventListener('click', handleSelectAll);
   $('btn-select-none').addEventListener('click', handleSelectNone);
   $('btn-summarize').addEventListener('click', handleSummarize);
+  $('btn-direct-summarize').addEventListener('click', handleDirectSummarize);
   $('btn-download').addEventListener('click', handleDownload);
 
   // Allow Enter key in search panel inputs to trigger search

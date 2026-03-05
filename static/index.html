@@ -48,6 +48,29 @@
       <!-- 오류 배너 -->
       <div id="error-banner" class="error-banner" hidden></div>
 
+      <!-- 직접 입력 패널 -->
+      <div id="direct-panel" class="panel">
+        <h2>직접 입력 요약</h2>
+
+        <div class="form-group">
+          <label for="direct-url">URL <span class="label-optional">(선택)</span></label>
+          <input type="url" id="direct-url" placeholder="https://example.com/article" />
+        </div>
+
+        <div class="form-group">
+          <label for="direct-text">기사 내용 <span class="label-optional">(선택)</span></label>
+          <textarea id="direct-text" rows="6" placeholder="기사 내용을 붙여넣어 주세요...&#10;URL과 함께 입력하면 텍스트가 우선 사용됩니다."></textarea>
+        </div>
+
+        <p class="input-hint">URL 또는 기사 내용 중 하나 이상 입력하세요.</p>
+
+        <button id="btn-direct-summarize" class="btn btn-primary btn-block">요약</button>
+
+        <div id="direct-progress" hidden>
+          <p id="direct-progress-text" class="progress-text progress-text--inline"></p>
+        </div>
+      </div>
+
       <!-- 기사 목록 패널 -->
       <div id="article-panel" hidden>
         <div class="panel-header">
@@ -60,8 +83,8 @@
         <ul id="article-list" class="article-list"></ul>
       </div>
 
-      <!-- 요약 설정 패널 -->
-      <div id="summary-panel" class="panel" hidden>
+      <!-- 요약 설정 패널 (항상 표시) -->
+      <div id="summary-panel" class="panel">
         <h2>요약 양식 설정</h2>
 
         <div class="form-group">
