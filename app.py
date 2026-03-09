@@ -206,9 +206,22 @@ def main():
         # Gemini 모델 선택
         model_choice = st.selectbox(
             "Gemini 모델",
-            options=["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
+            options=[
+                "gemini-3.1-pro-preview",
+                "gemini-3.1-flash-lite-preview",
+                "gemini-2.5-pro",
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-lite",
+                "gemini-2.0-flash",
+            ],
             index=0,
-            help="url_context 도구는 Gemini 2.0 이상에서만 지원됩니다.",
+            help=(
+                "사용할 Gemini 모델을 선택하세요.\n"
+                "- gemini-3.1-pro-preview: 최신 고성능 모델 (추천)\n"
+                "- gemini-3.1-flash-lite-preview: 빠르고 저렴한 최신 모델\n"
+                "- gemini-2.5-pro / flash / flash-lite: 안정화 모델\n"
+                "- gemini-2.0-flash: 구버전 (2026년 6월 지원 종료 예정)"
+            ),
         )
 
         summarize_clicked = st.button("✨ 선택된 기사 요약", type="primary", use_container_width=True)

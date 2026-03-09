@@ -9,7 +9,7 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL = "gemini-2.0-flash"
+_DEFAULT_MODEL = "gemini-3.1-pro-preview"
 _MAX_RETRIES = 3
 
 
