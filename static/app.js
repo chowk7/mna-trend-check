@@ -360,6 +360,55 @@ function handleDownload() {
   URL.revokeObjectURL(a.href);
 }
 
+// ── Manual Summarize ──────────────────────────────────────────
+async function handleManualSummarize() {
+  const title   = document.getElementById('manual-title').value.trim();
+  const url     = document.getElementById('manual-url').value.trim();
+  const content = document.getElementById('manual-content').value.trim();
+  const statusEl = document.getElementById('manual-status');
+  const btn     = document.getElementById('manual-summarize-btn');
+
+  if (!content) {
+    statusEl.textContent = '기사 내용을 입력해 주세요.';
+    statusEl.style.color = 'var(--danger)';
+    return;
+  }
+
+  setLoading(btn, true, '✨ 요약하기');
+  statusEl.textContent = 'Gemini가 요약 중...';
+  statusEl.style.color = 'var(--text-muted)';
+
+  try {
+    const res = await apiFetch('/api/summarize-manual', {
+      method: 'POST',
+      body: JSON.stringify({
+        title,
+        url,
+        content,
+        custom_format: dom.customFormat.value,
+        model: dom.model.value,
+      }),
+    });
+
+    const data = await res.json();
+    const displayTitle = title || url || '수동 입력 기사';
+    const displayUrl   = url || '#';
+
+    // 요약 결과 섹션에 표시
+    state.summaries[displayUrl] = data.summary;
+    renderSummary(displayUrl, displayTitle, data.summary);
+
+    statusEl.textContent = '요약 완료!';
+    statusEl.style.color = 'var(--success, #16a34a)';
+    setTimeout(() => { statusEl.textContent = ''; }, 3000);
+  } catch (err) {
+    statusEl.textContent = `오류: ${err.message}`;
+    statusEl.style.color = 'var(--danger)';
+  } finally {
+    setLoading(btn, false, '✨ 요약하기');
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
   // Default dates: last 7 days
@@ -392,6 +441,8 @@ async function init() {
   }
 
   // Event listeners
+  document.getElementById('manual-summarize-btn')
+    .addEventListener('click', handleManualSummarize);
   dom.searchBtn.addEventListener('click', handleSearch);
   dom.summarizeBtn.addEventListener('click', handleSummarize);
   dom.downloadBtn.addEventListener('click', handleDownload);

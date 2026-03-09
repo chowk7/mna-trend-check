@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from news_fetcher import DEFAULT_KEYWORDS
 from orchestrator import search_all_sources
 from secret_manager import get_gemini_api_key
-from summarizer import summarize_article
+from summarizer import summarize_article, summarize_with_content
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -186,6 +186,39 @@ async def summarize(req: SummarizeRequest):
         media_type="text/event-stream",
         headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
     )
+
+
+class ManualSummarizeRequest(BaseModel):
+    title: str = ""
+    url: str = ""
+    content: str
+    custom_format: str
+    model: str = "gemini-3.1-pro-preview"
+
+
+@app.post("/api/summarize-manual")
+async def summarize_manual(req: ManualSummarizeRequest):
+    if not req.content.strip():
+        raise HTTPException(status_code=400, detail="기사 내용을 입력해 주세요.")
+
+    try:
+        api_key = _load_api_key()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"API 키 로딩 실패: {e}")
+
+    try:
+        summary = await asyncio.to_thread(
+            summarize_with_content,
+            content=req.content,
+            custom_format=req.custom_format,
+            api_key=api_key,
+            url=req.url,
+            model=req.model,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    return {"summary": summary}
 
 
 if __name__ == "__main__":
