@@ -4,7 +4,8 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from news_fetcher import fetch_articles, DEFAULT_KEYWORDS
+from news_fetcher import DEFAULT_KEYWORDS
+from orchestrator import search_all_sources
 from secret_manager import get_gemini_api_key
 from summarizer import summarize_article
 
@@ -72,6 +73,8 @@ def main():
         st.session_state.articles = []
     if "summaries" not in st.session_state:
         st.session_state.summaries = {}
+    if "source_counts" not in st.session_state:
+        st.session_state.source_counts = {}
 
     # ── 사이드바: 검색 설정 ─────────────────────────────────────────────────
     with st.sidebar:
@@ -107,6 +110,14 @@ def main():
             label_visibility="collapsed",
         )
 
+        st.divider()
+        st.markdown("**검색 소스 설정**")
+        use_gemini_fallback = st.checkbox(
+            "Gemini 검색 폴백 사용",
+            value=True,
+            help="DuckDuckGo + Google News RSS 검색에서 기사를 찾지 못할 경우 Gemini를 사용해 추가 검색합니다.",
+        )
+
         search_clicked = st.button("🔍 뉴스 검색", use_container_width=True, type="primary")
 
     # ── 날짜 유효성 검사 ────────────────────────────────────────────────────
@@ -117,9 +128,23 @@ def main():
     # ── 뉴스 검색 ───────────────────────────────────────────────────────────
     if search_clicked:
         st.session_state.summaries = {}  # 이전 요약 초기화
+        st.session_state.source_counts = {}
         with st.spinner(f"{start_date} ~ {end_date} M&A 뉴스 검색 중..."):
-            articles = fetch_articles(start_date, end_date, max_results, keywords=custom_keywords)
+            try:
+                api_key_for_search = load_api_key() if use_gemini_fallback else None
+            except Exception:
+                api_key_for_search = None
+
+            articles, source_counts = search_all_sources(
+                after_date=start_date,
+                before_date=end_date,
+                max_results=max_results,
+                keywords=custom_keywords,
+                api_key=api_key_for_search,
+                use_gemini_fallback=use_gemini_fallback,
+            )
         st.session_state.articles = articles
+        st.session_state.source_counts = source_counts
 
         if not articles:
             st.warning("해당 기간에 검색된 M&A 뉴스가 없습니다. 날짜 범위를 넓혀보세요.")
@@ -127,6 +152,12 @@ def main():
     # ── 기사 목록 표시 ──────────────────────────────────────────────────────
     articles = st.session_state.articles
     if articles:
+        # 소스별 건수 표시
+        source_counts = st.session_state.get("source_counts", {})
+        if source_counts:
+            parts = [f"**{src}**: {n}건" for src, n in source_counts.items() if n > 0]
+            st.caption("검색 소스 | " + " · ".join(parts))
+
         st.subheader(f"검색된 기사 목록 ({len(articles)}건)")
 
         # 전체 선택/해제
@@ -151,10 +182,12 @@ def main():
                     label_visibility="collapsed",
                 )
             with col_info:
+                search_src = article.get("search_source", "")
+                source_tag = f"`{search_src}` " if search_src else ""
                 source_info = f"**{article['source']}**  |  " if article["source"] else ""
                 date_info = f"`{article['published']}`  " if article["published"] else ""
                 st.markdown(
-                    f"{source_info}{date_info}[{article['title']}]({article['url']})"
+                    f"{source_tag}{source_info}{date_info}[{article['title']}]({article['url']})"
                 )
                 if article["snippet"]:
                     st.caption(article["snippet"])
