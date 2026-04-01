@@ -362,11 +362,11 @@ function handleDownload() {
 
 // ── Manual Summarize ──────────────────────────────────────────
 async function handleManualSummarize() {
-  const title   = document.getElementById('manual-title').value.trim();
-  const url     = document.getElementById('manual-url').value.trim();
-  const content = document.getElementById('manual-content').value.trim();
+  const title    = document.getElementById('manual-title').value.trim();
+  const url      = document.getElementById('manual-url').value.trim();
+  const content  = document.getElementById('manual-content').value.trim();
   const statusEl = document.getElementById('manual-status');
-  const btn     = document.getElementById('manual-summarize-btn');
+  const btn      = document.getElementById('manual-summarize-btn');
 
   if (!content) {
     statusEl.textContent = '기사 내용을 입력해 주세요.';
@@ -374,7 +374,8 @@ async function handleManualSummarize() {
     return;
   }
 
-  setLoading(btn, true, '✨ 요약하기');
+  btn.disabled = true;
+  btn.textContent = '요약 중...';
   statusEl.textContent = 'Gemini가 요약 중...';
   statusEl.style.color = 'var(--text-muted)';
 
@@ -392,9 +393,8 @@ async function handleManualSummarize() {
 
     const data = await res.json();
     const displayTitle = title || url || '수동 입력 기사';
-    const displayUrl   = url || '#';
+    const displayUrl   = url || `manual-${Date.now()}`;
 
-    // 요약 결과 섹션에 표시
     state.summaries[displayUrl] = data.summary;
     renderSummary(displayUrl, displayTitle, data.summary);
 
@@ -405,7 +405,8 @@ async function handleManualSummarize() {
     statusEl.textContent = `오류: ${err.message}`;
     statusEl.style.color = 'var(--danger)';
   } finally {
-    setLoading(btn, false, '✨ 요약하기');
+    btn.disabled = false;
+    btn.textContent = '✨ 요약하기';
   }
 }
 
