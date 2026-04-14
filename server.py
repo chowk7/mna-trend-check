@@ -66,8 +66,9 @@ DEFAULT_FORMAT = """[예시 1번]
 ㅡ 제목에서 회사이름을 언급하는 경우에 회사 본사가 위치한 국가를 한자로 덧붙여줌 (예를 들어 美 nVidia)"""
 
 MODELS = [
-    {"id": "gemini-3.1-pro-preview", "label": "gemini-3.1-pro-preview (최신, 추천)"},
-    {"id": "gemini-3.1-flash-lite-preview", "label": "gemini-3.1-flash-lite-preview (빠름)"},
+    {"id": "gemini-3-flash-preview", "label": "gemini-3-flash-preview (기본값)"},
+    {"id": "gemini-3.1-pro-preview", "label": "gemini-3.1-pro-preview (고성능)"},
+    {"id": "gemini-3.1-flash-lite-preview", "label": "gemini-3.1-flash-lite-preview (경량)"},
     {"id": "gemini-2.5-pro", "label": "gemini-2.5-pro (안정)"},
     {"id": "gemini-2.5-flash", "label": "gemini-2.5-flash (안정)"},
     {"id": "gemini-2.5-flash-lite", "label": "gemini-2.5-flash-lite (안정, 경량)"},
@@ -137,7 +138,7 @@ class ArticleRef(BaseModel):
 class SummarizeRequest(BaseModel):
     articles: list[ArticleRef]
     custom_format: str
-    model: str = "gemini-3.1-pro-preview"
+    model: str = "gemini-3-flash-preview"
 
 
 @app.post("/api/summarize")
@@ -193,7 +194,7 @@ class ManualSummarizeRequest(BaseModel):
     url: str = ""
     content: str
     custom_format: str
-    model: str = "gemini-3.1-pro-preview"
+    model: str = "gemini-3-flash-preview"
 
 
 @app.post("/api/summarize-manual")
