@@ -231,9 +231,11 @@ class SourceConfig(BaseModel):
 class SearchRequest(BaseModel):
     start_date: str
     end_date: str
-    max_results: int = 30
+    max_results: int = 100
     use_gemini_fallback: bool = True
     source_configs: dict[str, SourceConfig] = {}
+    equal_per_source: bool = False
+    per_source_max: int | None = None
 
 
 @app.post("/api/search")
@@ -260,6 +262,8 @@ async def search(req: SearchRequest):
         source_configs={k: v.model_dump() for k, v in req.source_configs.items()},
         api_key=api_key,
         use_gemini_fallback=req.use_gemini_fallback,
+        equal_per_source=req.equal_per_source,
+        per_source_max=req.per_source_max,
         cse_api_key=_effective_cse_api_key(),
         cse_cx=_effective_cse_cx(),
         naver_client_id=_effective_naver_client_id(),

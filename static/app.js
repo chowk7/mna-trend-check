@@ -131,21 +131,29 @@ function renderDealCard(deal, index) {
     `<span class="article-src-badge ${sourceBadgeClass(src)}">${sourceBadgeLabel(src)}</span>`
   ).join('');
 
+  // Check if all articles in this deal are selected
+  const allSelected = deal.articles.every(a => state.selected.has(a.url));
+  const dealKey = `deal-${index}`;
+
   return `
     <div class="deal-card" data-deal-index="${index}">
-      <div class="deal-header" onclick="toggleDeal(${index})">
+      <div class="deal-header">
         <div class="deal-info">
-          <span class="deal-icon">🤝</span>
-          <div class="deal-companies">
-            <span class="deal-company">${escHtml(deal.companyA)}</span>
-            <span class="deal-arrow">→</span>
-            <span class="deal-company">${escHtml(deal.companyB)}</span>
-          </div>
-          <span class="deal-count">${deal.articles.length}건</span>
+          <input type="checkbox" class="deal-select-all" id="${dealKey}" ${allSelected ? 'checked' : ''}
+                 onchange="handleDealSelectAll(${index}, this.checked)">
+          <label for="${dealKey}" class="deal-select-label" onclick="toggleDeal(${index})">
+            <span class="deal-icon">🤝</span>
+            <div class="deal-companies">
+              <span class="deal-company">${escHtml(deal.companyA)}</span>
+              <span class="deal-arrow">→</span>
+              <span class="deal-company">${escHtml(deal.companyB)}</span>
+            </div>
+            <span class="deal-count">${deal.articles.length}건</span>
+          </label>
         </div>
         <div class="deal-meta">
           ${sourceBadges}
-          <span class="deal-expand-icon" id="deal-icon-${index}">▼</span>
+          <span class="deal-expand-icon" id="deal-icon-${index}" onclick="toggleDeal(${index})">▼</span>
         </div>
       </div>
       <div class="deal-articles" id="deal-articles-${index}" style="display:none">
@@ -153,6 +161,24 @@ function renderDealCard(deal, index) {
       </div>
     </div>`;
 }
+
+function handleDealSelectAll(dealIndex, checked) {
+  const deal = groupArticlesByDeal(state.articles).deals[dealIndex];
+  if (!deal) return;
+  
+  deal.articles.forEach(a => {
+    if (checked) {
+      state.selected.add(a.url);
+    } else {
+      state.selected.delete(a.url);
+    }
+  });
+  
+  renderArticles();
+  updateSummarizeBtn();
+}
+
+window.handleDealSelectAll = handleDealSelectAll;
 
 function renderArticleItem(a) {
   const srcClass = sourceBadgeClass(a.search_source);
@@ -363,11 +389,24 @@ async function handleSearch() {
 
   try {
     const source_configs = {};
+    let enabledCount = 0;
     for (const [key, s] of Object.entries(dom.sources || {})) {
+      const enabled = s.en ? s.en.checked : true;
       source_configs[key] = {
-        enabled:  s.en  ? s.en.checked          : true,
-        keywords: s.kw  ? (s.kw.value.trim() || null) : null,
+        enabled,
+        keywords: s.kw ? (s.kw.value.trim() || null) : null,
       };
+      if (enabled) enabledCount++;
+    }
+
+    let maxResults = parseInt(dom.maxResults?.value ?? '100', 10);
+    const equalPerSource = dom.equalPerSource?.checked ?? false;
+    
+    // 소스별 동일 수 할당 시 per_source_max_results 계산
+    let perSourceMax = null;
+    if (equalPerSource && enabledCount > 0) {
+      perSourceMax = Math.floor(maxResults / enabledCount);
+      maxResults = perSourceMax * enabledCount; // 실제 총합
     }
 
     const res = await apiFetch('/api/search', {
@@ -375,9 +414,11 @@ async function handleSearch() {
       body: JSON.stringify({
         start_date:          dom.startDate?.value ?? '',
         end_date:            dom.endDate?.value ?? '',
-        max_results:         parseInt(dom.maxResults?.value ?? '30', 10),
+        max_results:         maxResults,
         use_gemini_fallback: dom.geminiFallback?.checked ?? true,
         source_configs,
+        equal_per_source:     equalPerSource,
+        per_source_max:      perSourceMax,
       }),
     });
 
@@ -598,6 +639,7 @@ async function init() {
     startDate:        $('start-date'),
     endDate:          $('end-date'),
     maxResults:       $('max-results'),
+    equalPerSource:   $('equal-per-source'),
     maxResultsValue:  $('max-results-value'),
     geminiFallback:   $('gemini-fallback'),
     searchBtn:        $('search-btn'),
