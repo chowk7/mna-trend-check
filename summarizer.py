@@ -9,7 +9,7 @@ from google.genai import types
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MODEL = "gemini-2.0-flash"
+_DEFAULT_MODEL = "gemini-3-flash-preview"
 _MAX_RETRIES = 3
 
 
@@ -191,6 +191,17 @@ def _build_prompt(url: str | None, custom_format: str, direct_text: str | None =
 
 [기사 URL]
 {url}
+
+[예시 양식 및 규칙]
+{custom_format}"""
+
+
+def _build_content_prompt(content: str, custom_format: str, url: str = "") -> str:
+    url_section = f"\n[기사 URL]\n{url}\n" if url.strip() else ""
+    return f"""다음 기사 내용을 읽고, 제공된 예시 양식에 맞춰 요약해 주세요.
+{url_section}
+[기사 내용]
+{content}
 
 [예시 양식 및 규칙]
 {custom_format}"""
