@@ -428,7 +428,7 @@ async function saveSettings() {
 
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
-  // Build all DOM references here, after DOMContentLoaded
+  // 1. DOM 레퍼런스 구성 (DOMContentLoaded 이후 보장)
   dom = {
     startDate:        $('start-date'),
     endDate:          $('end-date'),
@@ -475,7 +475,7 @@ async function init() {
     },
   };
 
-  // Default dates
+  // 2. 기본 날짜 설정
   const today = new Date();
   const weekAgo = new Date(today);
   weekAgo.setDate(today.getDate() - 7);
@@ -486,26 +486,7 @@ async function init() {
     if (dom.maxResultsValue) dom.maxResultsValue.textContent = dom.maxResults.value;
   });
 
-  // Load config
-  try {
-    const res = await fetch('/api/config');
-    const config = await res.json();
-    if (dom.model) {
-      dom.model.innerHTML = (config.models || [])
-        .map((m) => `<option value="${escHtml(m.id)}">${escHtml(m.label)}</option>`)
-        .join('');
-    }
-    if (dom.customFormat) dom.customFormat.value = config.default_format ?? '';
-    for (const [key, info] of Object.entries(config.sources || {})) {
-      const s = dom.sources[key];
-      if (s?.kw) s.kw.value = info.default_keywords ?? '';
-      updateSourceAvailability(key, info.available);
-    }
-  } catch (err) {
-    console.error('Config load failed:', err);
-  }
-
-  // Register all event listeners using the null-safe `on()` helper
+  // 3. 이벤트 리스너를 먼저 등록 (async fetch 전에)
   on('manual-summarize-btn', 'click', handleManualSummarize);
   on('settings-btn',         'click', openSettings);
   on(modal.closeBtn,         'click', closeSettings);
@@ -528,6 +509,30 @@ async function init() {
   on(dom.downloadBtn,    'click', handleDownload);
   on(dom.selectAllBtn,   'click', handleSelectAll);
   on(dom.deselectAllBtn, 'click', handleDeselectAll);
+
+  // 4. 설정 로드 (비동기, 위 리스너 등록 후 실행)
+  try {
+    const res = await fetch('/api/config');
+    const config = await res.json();
+    if (dom.model) {
+      dom.model.innerHTML = (config.models || [])
+        .map((m) => `<option value="${escHtml(m.id)}">${escHtml(m.label)}</option>`)
+        .join('');
+    }
+    if (dom.customFormat) dom.customFormat.value = config.default_format ?? '';
+    for (const [key, info] of Object.entries(config.sources || {})) {
+      const s = dom.sources[key];
+      if (s?.kw) s.kw.value = info.default_keywords ?? '';
+      updateSourceAvailability(key, info.available);
+    }
+  } catch (err) {
+    console.error('Config load failed:', err);
+  }
 }
 
-document.addEventListener('DOMContentLoaded', init);
+// DOMContentLoaded 이미 지난 경우도 처리
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
