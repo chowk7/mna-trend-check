@@ -31,10 +31,10 @@ _api_key_cache: str | None = None
 _settings_cache: dict = {}  # GCS에서 로드한 설정
 
 # ── 환경변수 (폴백) ───────────────────────────────────────────
-_ENV_CSE_API_KEY = os.environ.get("GOOGLE_CSE_API_KEY", "")
-_ENV_CSE_CX = os.environ.get("GOOGLE_CSE_CX", "")
-_ENV_NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
-_ENV_NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
+_ENV_CSE_API_KEY = os.environ.get("GOOGLE_CSE_API_KEY", "AIzaSyDLPbiIhfTeIaFP2JPaC3vEBpowOwKYhVA")
+_ENV_CSE_CX = os.environ.get("GOOGLE_CSE_CX", "620f073b5bf414784")
+_ENV_NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "_jOicpv_8TEwG0M3VpLK")
+_ENV_NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "KmUiTp1kgi")
 
 
 def _load_api_key() -> str:
