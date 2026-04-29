@@ -370,7 +370,11 @@ async function handleManualSummarize() {
 
 // ── Settings Modal ────────────────────────────────────────────
 async function openSettings() {
-  if (!modal.el) return;
+  console.log('openSettings called, modal.el:', modal.el);
+  if (!modal.el) {
+    alert('설정 모달을 찾을 수 없습니다. 페이지를 새로고침해주세요.');
+    return;
+  }
   modal.el.style.display = 'flex';
   if (modal.statusEl) modal.statusEl.textContent = '';
 
