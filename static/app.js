@@ -137,11 +137,12 @@ function renderDealCard(deal, index) {
 
   return `
     <div class="deal-card" data-deal-index="${index}">
-      <div class="deal-header">
+      <div class="deal-header" onclick="toggleDeal(${index})">
         <div class="deal-info">
           <input type="checkbox" class="deal-select-all" id="${dealKey}" ${allSelected ? 'checked' : ''}
-                 onchange="handleDealSelectAll(${index}, this.checked)">
-          <label for="${dealKey}" class="deal-select-label" onclick="toggleDeal(${index})">
+                 onchange="handleDealSelectAll(${index}, this.checked)"
+                 onclick="event.stopPropagation()">
+          <div class="deal-select-label">
             <span class="deal-icon">🤝</span>
             <div class="deal-companies">
               <span class="deal-company">${escHtml(deal.companyA)}</span>
@@ -149,11 +150,11 @@ function renderDealCard(deal, index) {
               <span class="deal-company">${escHtml(deal.companyB)}</span>
             </div>
             <span class="deal-count">${deal.articles.length}건</span>
-          </label>
+          </div>
         </div>
         <div class="deal-meta">
           ${sourceBadges}
-          <span class="deal-expand-icon" id="deal-icon-${index}" onclick="toggleDeal(${index})">▼</span>
+          <span class="deal-expand-icon" id="deal-icon-${index}">▼</span>
         </div>
       </div>
       <div class="deal-articles" id="deal-articles-${index}" style="display:none">
