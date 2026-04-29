@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 _SEARCH_SOURCE = "Naver News"
 
+DEFAULT_KEYWORDS_NAVER = "인수 합병 M&A"
+
 
 def fetch_articles_naver(
     client_id: str,
