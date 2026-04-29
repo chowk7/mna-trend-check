@@ -157,6 +157,12 @@ async def get_config():
 @app.get("/api/settings")
 async def get_settings():
     """현재 GCS 설정을 반환합니다. 민감 값은 마스킹합니다."""
+    # cache가 비어있으면 GCS에서 다시 로드
+    global _settings_cache
+    if not _settings_cache:
+        _settings_cache = load_settings()
+        logger.info("Settings cache miss, reloaded from GCS")
+
     def mask(val: str) -> str:
         if not val:
             return ""
