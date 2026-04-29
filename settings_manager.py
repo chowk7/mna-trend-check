@@ -1,10 +1,10 @@
 """
 GCS 기반 설정 저장소 - Google CSE / Naver News 설정 관리
+server.py에서 사용하는 플랫 키 구조 사용
 """
 import json
 import logging
 import os
-from datetime import date
 from typing import Any
 
 from google.cloud import storage
@@ -15,18 +15,12 @@ logger = logging.getLogger(__name__)
 # GCS 설정 파일 이름
 SETTINGS_FILE = "settings.json"
 
-# 기본값
+# 기본값 (플랫 키 구조 - server.py와 호환)
 DEFAULT_SETTINGS = {
-    "google_cse": {
-        "enabled": False,
-        "api_key": "",
-        "search_engine_id": "",
-    },
-    "naver_news": {
-        "enabled": False,
-        "client_id": "",
-        "client_secret": "",
-    },
+    "cse_api_key": "",
+    "cse_cx": "",
+    "naver_client_id": "",
+    "naver_client_secret": "",
 }
 
 
@@ -88,7 +82,16 @@ def load_settings() -> dict:
 
 
 def save_settings(settings: dict) -> bool:
-    """GCS에 설정 저장"""
+    """GCS에 설정 저장
+    
+    Args:
+        settings: 플랫 키 딕셔너리 {
+            "cse_api_key": str,
+            "cse_cx": str,
+            "naver_client_id": str,
+            "naver_client_secret": str
+        }
+    """
     try:
         client = _get_gcs_client()
         bucket = client.bucket(_get_bucket_name())
@@ -112,42 +115,52 @@ def save_settings(settings: dict) -> bool:
 def get_cse_settings() -> dict:
     """Google CSE 설정 반환"""
     settings = load_settings()
-    return settings.get("google_cse", DEFAULT_SETTINGS["google_cse"])
+    return {
+        "api_key": settings.get("cse_api_key", ""),
+        "search_engine_id": settings.get("cse_cx", ""),
+    }
 
 
 def get_naver_settings() -> dict:
     """Naver News 설정 반환"""
     settings = load_settings()
-    return settings.get("naver_news", DEFAULT_SETTINGS["naver_news"])
+    return {
+        "client_id": settings.get("naver_client_id", ""),
+        "client_secret": settings.get("naver_client_secret", ""),
+    }
 
 
 def update_cse_settings(api_key: str = None, search_engine_id: str = None, enabled: bool = None) -> bool:
     """Google CSE 설정 업데이트"""
     settings = load_settings()
-    cse = settings.get("google_cse", {})
 
     if api_key is not None:
-        cse["api_key"] = api_key
+        settings["cse_api_key"] = api_key
     if search_engine_id is not None:
-        cse["search_engine_id"] = search_engine_id
-    if enabled is not None:
-        cse["enabled"] = enabled
+        settings["cse_cx"] = search_engine_id
+    # enabled는 UI에서 관리하므로 여기서는 저장하지 않음
 
-    settings["google_cse"] = cse
     return save_settings(settings)
 
 
 def update_naver_settings(client_id: str = None, client_secret: str = None, enabled: bool = None) -> bool:
     """Naver News 설정 업데이트"""
     settings = load_settings()
-    naver = settings.get("naver_news", {})
 
     if client_id is not None:
-        naver["client_id"] = client_id
+        settings["naver_client_id"] = client_id
     if client_secret is not None:
-        naver["client_secret"] = client_secret
-    if enabled is not None:
-        naver["enabled"] = enabled
+        settings["naver_client_secret"] = client_secret
+    # enabled는 UI에서 관리하므로 여기서는 저장하지 않음
 
-    settings["naver_news"] = naver
     return save_settings(settings)
+
+
+def is_gcs_configured() -> bool:
+    """GCS가 설정되었는지 확인"""
+    try:
+        client = _get_gcs_client()
+        bucket = client.bucket(_get_bucket_name())
+        return bucket.exists()
+    except Exception:
+        return False
