@@ -14,6 +14,7 @@
       <div class="sidebar-header">
         <span class="logo">📰</span>
         <h1>M&amp;A 뉴스 요약기</h1>
+        <button id="settings-btn" class="icon-btn" title="설정">⚙️</button>
       </div>
 
       <!-- Search Settings -->
@@ -186,6 +187,65 @@
       </div>
 
     </main>
+  </div>
+
+  <!-- ── Settings Modal ──────────────────────────────────────── -->
+  <div id="settings-modal" class="modal" style="display:none" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" id="settings-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">⚙️ 소스 API 설정</h2>
+        <button id="settings-close-btn" class="modal-close" aria-label="닫기">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- GCS 상태 -->
+        <div id="gcs-status-bar" class="settings-notice" style="display:none"></div>
+
+        <!-- Google CSE -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="settings-badge badge-cse">CSE</span>
+            Google Custom Search
+          </div>
+          <div class="form-group">
+            <label for="s-cse-key">API Key</label>
+            <div class="input-row">
+              <input type="password" id="s-cse-key" autocomplete="off" placeholder="AIza...">
+              <button class="toggle-vis-btn" data-target="s-cse-key" title="표시/숨김">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="s-cse-cx">Search Engine ID (CX)</label>
+            <input type="text" id="s-cse-cx" autocomplete="off" placeholder="017...">
+          </div>
+        </div>
+
+        <!-- Naver News -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="settings-badge badge-naver">Naver</span>
+            Naver 뉴스 OpenAPI
+          </div>
+          <div class="form-group">
+            <label for="s-naver-id">Client ID</label>
+            <input type="text" id="s-naver-id" autocomplete="off" placeholder="">
+          </div>
+          <div class="form-group">
+            <label for="s-naver-secret">Client Secret</label>
+            <div class="input-row">
+              <input type="password" id="s-naver-secret" autocomplete="off" placeholder="">
+              <button class="toggle-vis-btn" data-target="s-naver-secret" title="표시/숨김">👁</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span id="settings-save-status" class="save-status"></span>
+        <button id="settings-save-btn" class="btn btn-primary">💾 저장</button>
+      </div>
+    </div>
   </div>
 
   <script src="/static/app.js"></script>

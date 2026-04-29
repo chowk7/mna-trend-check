@@ -11,11 +11,11 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from news_fetcher import DEFAULT_KEYWORDS
-from alternative_fetcher import _build_ddg_query
 from cse_fetcher import DEFAULT_KEYWORDS_CSE
 from naver_fetcher import DEFAULT_KEYWORDS_NAVER
 from orchestrator import search_all_sources
 from secret_manager import get_gemini_api_key
+from settings_manager import load_settings, save_settings, is_gcs_configured
 from summarizer import summarize_article, summarize_with_content
 
 logging.basicConfig(level=logging.INFO)
@@ -26,13 +26,15 @@ STATIC_DIR = Path(__file__).parent / "static"
 app = FastAPI(title="M&A 뉴스 요약기")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+# ── 캐시 ──────────────────────────────────────────────────────
 _api_key_cache: str | None = None
+_settings_cache: dict = {}  # GCS에서 로드한 설정
 
-# CSE / Naver 환경변수
-CSE_API_KEY = os.environ.get("GOOGLE_CSE_API_KEY", "")
-CSE_CX = os.environ.get("GOOGLE_CSE_CX", "")
-NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
-NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
+# ── 환경변수 (폴백) ───────────────────────────────────────────
+_ENV_CSE_API_KEY = os.environ.get("GOOGLE_CSE_API_KEY", "")
+_ENV_CSE_CX = os.environ.get("GOOGLE_CSE_CX", "")
+_ENV_NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
+_ENV_NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
 
 
 def _load_api_key() -> str:
@@ -47,6 +49,36 @@ def _load_api_key() -> str:
     return _api_key_cache
 
 
+def _get_cred(key: str, env_val: str) -> str:
+    """GCS 설정 우선, 없으면 환경변수 폴백."""
+    return _settings_cache.get(key) or env_val
+
+
+def _effective_cse_api_key() -> str:
+    return _get_cred("cse_api_key", _ENV_CSE_API_KEY)
+
+
+def _effective_cse_cx() -> str:
+    return _get_cred("cse_cx", _ENV_CSE_CX)
+
+
+def _effective_naver_client_id() -> str:
+    return _get_cred("naver_client_id", _ENV_NAVER_CLIENT_ID)
+
+
+def _effective_naver_client_secret() -> str:
+    return _get_cred("naver_client_secret", _ENV_NAVER_CLIENT_SECRET)
+
+
+# ── 시작 시 GCS 설정 로드 ─────────────────────────────────────
+@app.on_event("startup")
+async def _startup():
+    global _settings_cache
+    _settings_cache = load_settings()
+    logger.info("GCS 설정 로드 완료: %d개 키", len(_settings_cache))
+
+
+# ── 기본 요약 양식 ────────────────────────────────────────────
 DEFAULT_FORMAT = """[예시 1번]
 (10/22일, 반도체) 韓세미파이브 IPO 절차 진행 중, 예상 시가총액 0.7~0.8兆 수준
 ㅡ 17日 韓 맞춤형 반도체 설계업체 세미파이브(최대주주 美SiFive社 18% 보유)는 코스닥 상장위한 증권신고서 제출 (대표주관사는 삼성/UBS)
@@ -87,8 +119,12 @@ MODELS = [
 _DEFAULT_DDG_KEYWORDS = "acquire divest merger acquisition"
 
 
+# ── API ───────────────────────────────────────────────────────
+
 @app.get("/api/config")
 async def get_config():
+    cse_ok = bool(_effective_cse_api_key() and _effective_cse_cx())
+    naver_ok = bool(_effective_naver_client_id() and _effective_naver_client_secret())
     return {
         "default_format": DEFAULT_FORMAT,
         "models": MODELS,
@@ -105,15 +141,72 @@ async def get_config():
             },
             "cse": {
                 "label": "Google CSE",
-                "available": bool(CSE_API_KEY and CSE_CX),
+                "available": cse_ok,
                 "default_keywords": DEFAULT_KEYWORDS_CSE,
             },
             "naver": {
                 "label": "Naver 뉴스",
-                "available": bool(NAVER_CLIENT_ID and NAVER_CLIENT_SECRET),
+                "available": naver_ok,
                 "default_keywords": DEFAULT_KEYWORDS_NAVER,
             },
         },
+        "gcs_configured": is_gcs_configured(),
+    }
+
+
+@app.get("/api/settings")
+async def get_settings():
+    """현재 GCS 설정을 반환합니다. 민감 값은 마스킹합니다."""
+    def mask(val: str) -> str:
+        if not val:
+            return ""
+        return val[:4] + "****" if len(val) > 4 else "****"
+
+    return {
+        "cse_api_key": _settings_cache.get("cse_api_key", ""),
+        "cse_cx": _settings_cache.get("cse_cx", ""),
+        "naver_client_id": _settings_cache.get("naver_client_id", ""),
+        "naver_client_secret": _settings_cache.get("naver_client_secret", ""),
+        # 환경변수 현황 (실제 값 아님)
+        "env_cse_api_key_set": bool(_ENV_CSE_API_KEY),
+        "env_cse_cx_set": bool(_ENV_CSE_CX),
+        "env_naver_client_id_set": bool(_ENV_NAVER_CLIENT_ID),
+        "env_naver_client_secret_set": bool(_ENV_NAVER_CLIENT_SECRET),
+        "gcs_configured": is_gcs_configured(),
+    }
+
+
+class SettingsUpdateRequest(BaseModel):
+    cse_api_key: str = ""
+    cse_cx: str = ""
+    naver_client_id: str = ""
+    naver_client_secret: str = ""
+
+
+@app.post("/api/settings")
+async def update_settings(req: SettingsUpdateRequest):
+    global _settings_cache
+    new_settings = {
+        "cse_api_key": req.cse_api_key.strip(),
+        "cse_cx": req.cse_cx.strip(),
+        "naver_client_id": req.naver_client_id.strip(),
+        "naver_client_secret": req.naver_client_secret.strip(),
+    }
+    try:
+        await asyncio.to_thread(save_settings, new_settings)
+    except EnvironmentError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error("설정 저장 실패: %s", e)
+        raise HTTPException(status_code=500, detail=f"GCS 저장 실패: {e}")
+
+    _settings_cache = new_settings
+    cse_ok = bool(_effective_cse_api_key() and _effective_cse_cx())
+    naver_ok = bool(_effective_naver_client_id() and _effective_naver_client_secret())
+    return {
+        "ok": True,
+        "cse_available": cse_ok,
+        "naver_available": naver_ok,
     }
 
 
@@ -121,6 +214,8 @@ async def get_config():
 async def root():
     return HTMLResponse(content=(STATIC_DIR / "index.html").read_text(encoding="utf-8"))
 
+
+# ── Search ────────────────────────────────────────────────────
 
 class SourceConfig(BaseModel):
     enabled: bool = True
@@ -159,10 +254,10 @@ async def search(req: SearchRequest):
         source_configs={k: v.model_dump() for k, v in req.source_configs.items()},
         api_key=api_key,
         use_gemini_fallback=req.use_gemini_fallback,
-        cse_api_key=CSE_API_KEY,
-        cse_cx=CSE_CX,
-        naver_client_id=NAVER_CLIENT_ID,
-        naver_client_secret=NAVER_CLIENT_SECRET,
+        cse_api_key=_effective_cse_api_key(),
+        cse_cx=_effective_cse_cx(),
+        naver_client_id=_effective_naver_client_id(),
+        naver_client_secret=_effective_naver_client_secret(),
     )
 
     for a in articles:
@@ -170,6 +265,8 @@ async def search(req: SearchRequest):
 
     return {"articles": articles, "source_counts": source_counts}
 
+
+# ── Summarize ─────────────────────────────────────────────────
 
 class ArticleRef(BaseModel):
     url: str

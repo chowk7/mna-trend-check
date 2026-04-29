@@ -233,16 +233,15 @@ async function handleSearch() {
 
   setLoading(dom.searchBtn, true, '🔍 뉴스 검색');
 
-  // Build per-source config
-  const source_configs = {};
-  for (const [key, s] of Object.entries(dom.sources)) {
-    source_configs[key] = {
-      enabled: s.en.checked,
-      keywords: s.kw.value.trim() || null,
-    };
-  }
-
   try {
+    // Build per-source config
+    const source_configs = {};
+    for (const [key, s] of Object.entries(dom.sources)) {
+      source_configs[key] = {
+        enabled: s.en ? s.en.checked : true,
+        keywords: s.kw ? (s.kw.value.trim() || null) : null,
+      };
+    }
     const res = await apiFetch('/api/search', {
       method: 'POST',
       body: JSON.stringify({
@@ -428,6 +427,106 @@ async function handleManualSummarize() {
   }
 }
 
+// ── Settings Modal ────────────────────────────────────────────
+const settingsModal = {
+  el:         $('settings-modal'),
+  backdrop:   $('settings-backdrop'),
+  closeBtn:   $('settings-close-btn'),
+  saveBtn:    $('settings-save-btn'),
+  statusEl:   $('settings-save-status'),
+  gcsBar:     $('gcs-status-bar'),
+  fields: {
+    cseKey:      $('s-cse-key'),
+    cseCx:       $('s-cse-cx'),
+    naverId:     $('s-naver-id'),
+    naverSecret: $('s-naver-secret'),
+  },
+};
+
+async function openSettings() {
+  settingsModal.el.style.display = 'flex';
+  settingsModal.statusEl.textContent = '';
+
+  try {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+
+    settingsModal.fields.cseKey.value      = data.cse_api_key || '';
+    settingsModal.fields.cseCx.value       = data.cse_cx || '';
+    settingsModal.fields.naverId.value     = data.naver_client_id || '';
+    settingsModal.fields.naverSecret.value = data.naver_client_secret || '';
+
+    if (!data.gcs_configured) {
+      settingsModal.gcsBar.textContent =
+        'GCS_SETTINGS_BUCKET 환경변수가 설정되지 않아 저장할 수 없습니다.';
+      settingsModal.gcsBar.style.display = 'block';
+      settingsModal.saveBtn.disabled = true;
+    } else {
+      settingsModal.gcsBar.style.display = 'none';
+      settingsModal.saveBtn.disabled = false;
+    }
+  } catch (err) {
+    settingsModal.statusEl.textContent = `로드 실패: ${err.message}`;
+  }
+}
+
+function closeSettings() {
+  settingsModal.el.style.display = 'none';
+}
+
+async function saveSettings() {
+  settingsModal.saveBtn.disabled = true;
+  settingsModal.statusEl.textContent = '저장 중...';
+
+  try {
+    const res = await apiFetch('/api/settings', {
+      method: 'POST',
+      body: JSON.stringify({
+        cse_api_key:      settingsModal.fields.cseKey.value.trim(),
+        cse_cx:           settingsModal.fields.cseCx.value.trim(),
+        naver_client_id:  settingsModal.fields.naverId.value.trim(),
+        naver_client_secret: settingsModal.fields.naverSecret.value.trim(),
+      }),
+    });
+    const data = await res.json();
+
+    settingsModal.statusEl.textContent = '✓ 저장 완료';
+    settingsModal.statusEl.style.color = '#16a34a';
+
+    // 소스 가용성 업데이트
+    _updateSourceAvailability('cse', data.cse_available);
+    _updateSourceAvailability('naver', data.naver_available);
+
+    setTimeout(() => {
+      settingsModal.statusEl.textContent = '';
+      closeSettings();
+    }, 1200);
+  } catch (err) {
+    settingsModal.statusEl.textContent = `오류: ${err.message}`;
+    settingsModal.statusEl.style.color = 'var(--danger)';
+    settingsModal.saveBtn.disabled = false;
+  }
+}
+
+function _updateSourceAvailability(key, available) {
+  const s = dom.sources[key];
+  if (!s) return;
+  const badge = document.getElementById(`badge-${key}`);
+  if (available) {
+    s.en.disabled = false;
+    s.kw.disabled = false;
+    s.en.checked = true;
+    s.wrap.classList.remove('source-unavailable');
+    if (badge) badge.style.display = 'none';
+  } else {
+    s.en.checked = false;
+    s.en.disabled = true;
+    s.kw.disabled = true;
+    s.wrap.classList.add('source-unavailable');
+    if (badge) badge.style.display = 'inline';
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────
 async function init() {
   // Default dates: last 7 days
@@ -454,28 +553,38 @@ async function init() {
 
     dom.customFormat.value = config.default_format ?? '';
 
-    // Initialize per-source keyword fields
+    // Initialize per-source keyword fields and availability
     const sources = config.sources ?? {};
     for (const [key, info] of Object.entries(sources)) {
       const s = dom.sources[key];
       if (!s) continue;
-      s.kw.value = info.default_keywords ?? '';
-      if (!info.available) {
-        s.en.checked = false;
-        s.en.disabled = true;
-        s.kw.disabled = true;
-        s.wrap.classList.add('source-unavailable');
-        const badge = document.getElementById(`badge-${key}`);
-        if (badge) badge.style.display = 'inline';
-      }
+      if (s.kw) s.kw.value = info.default_keywords ?? '';
+      _updateSourceAvailability(key, info.available);
     }
   } catch (err) {
     console.error('Config load failed:', err);
   }
 
   // Event listeners
-  document.getElementById('manual-summarize-btn')
-    .addEventListener('click', handleManualSummarize);
+  $('manual-summarize-btn').addEventListener('click', handleManualSummarize);
+  $('settings-btn').addEventListener('click', openSettings);
+  settingsModal.closeBtn.addEventListener('click', closeSettings);
+  settingsModal.backdrop.addEventListener('click', closeSettings);
+  settingsModal.saveBtn.addEventListener('click', saveSettings);
+
+  // Toggle password visibility
+  document.querySelectorAll('.toggle-vis-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.target);
+      if (target) target.type = target.type === 'password' ? 'text' : 'password';
+    });
+  });
+
+  // Escape key closes modal
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && settingsModal.el.style.display !== 'none') closeSettings();
+  });
+
   dom.searchBtn.addEventListener('click', handleSearch);
   dom.summarizeBtn.addEventListener('click', handleSummarize);
   dom.downloadBtn.addEventListener('click', handleDownload);
