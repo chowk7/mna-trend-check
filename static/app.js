@@ -454,21 +454,122 @@ async function handleSummarize() {
   state.isSummarizing = true;
   updateSummarizeBtn();
 
-  const selectedArticles = state.articles
-    .filter((a) => state.selected.has(a.url))
-    .map((a) => ({ url: a.url, title: a.title }));
-
   if (dom.progressFill) dom.progressFill.style.width = '0%';
   if (dom.progressText) dom.progressText.textContent = '요약 준비 중...';
   if (dom.progressSection) dom.progressSection.style.display = 'block';
 
   try {
+    const selectedArticles = state.articles
+      .filter((a) => state.selected.has(a.url))
+      .map((a) => ({ url: a.url, title: a.title }));
+
+    // Check if we have deal-based selection
+    const { deals, ungrouped } = groupArticlesByDeal(state.articles);
+    const selectedDeals = deals.filter(deal => 
+      deal.articles.some(a => state.selected.has(a.url))
+    );
+
+    if (selectedDeals.length > 0) {
+      // Deal-based summarization
+      await summarizeDeals(selectedDeals, selectedArticles);
+    } else {
+      // Individual article summarization
+      await summarizeArticles(selectedArticles);
+    }
+  } catch (err) {
+    if (dom.progressSection) dom.progressSection.style.display = 'none';
+    alert(`요약 오류: ${err.message}`);
+  } finally {
+    state.isSummarizing = false;
+    updateSummarizeBtn();
+  }
+}
+
+async function summarizeDeals(selectedDeals, selectedArticles) {
+  const customFormat = dom.customFormat?.value ?? '';
+  const model = dom.model?.value ?? 'gemini-3-flash-preview';
+  
+  // Count total items (deals + individual articles)
+  const dealCount = selectedDeals.length;
+  const ungroupedCount = selectedArticles.filter(a => {
+    return !selectedDeals.some(d => d.articles.some(a2 => a2.url === a.url));
+  }).length;
+  const total = dealCount + ungroupedCount;
+  let processed = 0;
+
+  for (const deal of selectedDeals) {
+    const dealArticles = deal.articles.filter(a => state.selected.has(a.url));
+    const dealTitle = `${deal.companyA} → ${deal.companyB}`;
+
+    // Progress update
+    if (dom.progressFill) dom.progressFill.style.width = `${Math.round(processed / total * 100)}%`;
+    if (dom.progressText) dom.progressText.textContent = `딜 요약 중... (${processed + 1}/${total}): ${dealTitle}`;
+
+    try {
+      const res = await apiFetch('/api/summarize-deal', {
+        method: 'POST',
+        body: JSON.stringify({
+          deal_key: deal.key,
+          deal_title: dealTitle,
+          articles: dealArticles.map(a => ({ url: a.url, title: a.title })),
+          custom_format: customFormat,
+          model: model,
+        }),
+      });
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let data;
+          try { data = JSON.parse(line.slice(6)); } catch { continue; }
+          if (data.type === 'result') {
+            state.summaries[data.url] = data.summary;
+            renderSummary(data.url, data.title, data.summary);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Deal summarization error:', err);
+    }
+    processed++;
+  }
+
+  // Handle ungrouped articles
+  const ungrouped = selectedArticles.filter(a => {
+    return !selectedDeals.some(d => d.articles.some(a2 => a2.url === a.url));
+  });
+
+  if (ungrouped.length > 0) {
+    await summarizeArticles(ungrouped, processed, total);
+  } else {
+    if (dom.progressFill) dom.progressFill.style.width = '100%';
+    if (dom.progressText) dom.progressText.textContent = '완료!';
+    setTimeout(() => { if (dom.progressSection) dom.progressSection.style.display = 'none'; }, 1500);
+  }
+}
+
+async function summarizeArticles(articles, startIndex = 0, total = articles.length) {
+  if (articles.length === 0) return;
+
+  const customFormat = dom.customFormat?.value ?? '';
+  const model = dom.model?.value ?? 'gemini-3-flash-preview';
+
+  try {
     const res = await apiFetch('/api/summarize', {
       method: 'POST',
       body: JSON.stringify({
-        articles:      selectedArticles,
-        custom_format: dom.customFormat?.value ?? '',
-        model:         dom.model?.value ?? 'gemini-3-flash-preview',
+        articles: articles,
+        custom_format: customFormat,
+        model: model,
       }),
     });
 
@@ -487,10 +588,10 @@ async function handleSummarize() {
         let data;
         try { data = JSON.parse(line.slice(6)); } catch { continue; }
         if (data.type === 'progress') {
-          const pct = Math.round(((data.index + 1) / data.total) * 100);
+          const pct = Math.round(((startIndex + data.index + 1) / total) * 100);
           if (dom.progressFill) dom.progressFill.style.width = `${pct}%`;
           if (dom.progressText) dom.progressText.textContent =
-            `요약 중... (${data.index + 1}/${data.total}): ${data.title.slice(0, 50)}`;
+            `요약 중... (${startIndex + data.index + 1}/${total}): ${data.title.slice(0, 50)}`;
         } else if (data.type === 'result') {
           state.summaries[data.url] = data.summary;
           renderSummary(data.url, data.title, data.summary);
@@ -502,11 +603,7 @@ async function handleSummarize() {
       }
     }
   } catch (err) {
-    if (dom.progressSection) dom.progressSection.style.display = 'none';
-    alert(`요약 오류: ${err.message}`);
-  } finally {
-    state.isSummarizing = false;
-    updateSummarizeBtn();
+    throw err;
   }
 }
 

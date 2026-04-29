@@ -289,6 +289,15 @@ class SummarizeRequest(BaseModel):
     model: str = "gemini-3-flash-preview"
 
 
+class DealSummarizeRequest(BaseModel):
+    """딜 단위 요약 요청 - 여러 기사를 하나로 통합 요약"""
+    deal_key: str  # 딜 고유 키 (companyA → companyB)
+    deal_title: str  # 딜 표시 제목
+    articles: list[ArticleRef]  # 해당 딜의 선택된 기사들
+    custom_format: str
+    model: str = "gemini-3-flash-preview"
+
+
 @app.post("/api/summarize")
 async def summarize(req: SummarizeRequest):
     try:
@@ -327,6 +336,70 @@ async def summarize(req: SummarizeRequest):
                 )
                 + "\n\n"
             )
+
+        yield "data: " + json.dumps({"type": "done"}) + "\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
+
+@app.post("/api/summarize-deal")
+async def summarize_deal(req: DealSummarizeRequest):
+    """딜 단위 요약 - 여러 기사를 하나로 통합 요약"""
+    try:
+        api_key = _load_api_key()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"API 키 로딩 실패: {e}")
+
+    async def event_stream():
+        total = len(req.articles)
+        
+        # 딜 정보를 progress에 표시
+        yield (
+            "data: "
+            + json.dumps(
+                {"type": "progress", "index": 0, "total": total, "title": req.deal_title},
+                ensure_ascii=False,
+            )
+            + "\n\n"
+        )
+
+        # 기사들을 하나의 컨텍스트로 결합
+        articles_text = ""
+        for i, article in enumerate(req.articles):
+            articles_text += f"\n\n[{i+1}] {article.title}\nURL: {article.url}"
+
+        combined_prompt = f"다음 딜 관련 기사를 모두 읽고, 제공된 양식에 맞춰 통합 요약해 주세요.\n\n[딜] {req.deal_title}{articles_text}\n\n[요약 양식]{req.custom_format}"
+
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=api_key)
+            response = client.models.generate_content(
+                model=req.model,
+                contents=combined_prompt,
+                config=types.GenerateContentConfig(
+                    tools=[types.Tool(url_context=types.UrlContext())],
+                ),
+            )
+            summary = response.text
+            if response.candidates and response.candidates[0].finish_reason.name == "SAFETY":
+                summary = "[안전 필터에 의해 차단된 콘텐츠입니다.]"
+        except Exception as e:
+            summary = f"[오류: {e}]"
+
+        yield (
+            "data: "
+            + json.dumps(
+                {"type": "result", "url": req.deal_key, "title": req.deal_title, "summary": summary},
+                ensure_ascii=False,
+            )
+            + "\n\n"
+        )
 
         yield "data: " + json.dumps({"type": "done"}) + "\n\n"
 
