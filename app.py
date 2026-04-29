@@ -8,6 +8,14 @@ from news_fetcher import DEFAULT_KEYWORDS
 from orchestrator import search_all_sources
 from secret_manager import get_gemini_api_key
 from summarizer import summarize_article
+from settings_manager import (
+    get_cse_settings,
+    get_naver_settings,
+    update_cse_settings,
+    update_naver_settings,
+    save_settings,
+    load_settings,
+)
 
 logging.basicConfig(level=logging.INFO)
 
@@ -56,6 +64,88 @@ def _url_key(url: str) -> str:
 
 def _checkbox_key(url: str) -> str:
     return f"select_{_url_key(url)}"
+
+
+# ── 설정 패널 렌더링 ─────────────────────────────────────────────────────────
+
+def render_settings_panel():
+    """사이드바: 검색 소스 설정 패널"""
+    with st.sidebar:
+        st.divider()
+        with st.expander("⚙️ 검색 소스 설정", expanded=False):
+            # ── Google CSE 설정 ──────────────────────────────────────────
+            st.markdown("**Google CSE**")
+            cse = get_cse_settings()
+
+            cse_enabled = st.checkbox(
+                "Google CSE 사용",
+                value=cse.get("enabled", False),
+                key="cse_enabled",
+            )
+
+            cse_api_key = st.text_input(
+                "API Key",
+                value=cse.get("api_key", ""),
+                type="password",
+                key="cse_api_key",
+                help="Google Cloud Console에서 발급받은 API Key",
+            )
+
+            cse_engine_id = st.text_input(
+                "Search Engine ID (cx)",
+                value=cse.get("search_engine_id", ""),
+                key="cse_engine_id",
+                help="Custom Search Engine ID (검색엔진 ID)",
+            )
+
+            if st.button("💾 CSE 설정 저장", key="save_cse"):
+                success = update_cse_settings(
+                    api_key=cse_api_key,
+                    search_engine_id=cse_engine_id,
+                    enabled=cse_enabled,
+                )
+                if success:
+                    st.success("CSE 설정 저장 완료!")
+                else:
+                    st.error("CSE 설정 저장 실패")
+
+            st.divider()
+
+            # ── Naver News 설정 ──────────────────────────────────────────
+            st.markdown("**Naver 뉴스**")
+            naver = get_naver_settings()
+
+            naver_enabled = st.checkbox(
+                "Naver 뉴스 사용",
+                value=naver.get("enabled", False),
+                key="naver_enabled",
+            )
+
+            naver_client_id = st.text_input(
+                "Client ID",
+                value=naver.get("client_id", ""),
+                key="naver_client_id",
+                help="Naver Developers에서 발급받은 Client ID",
+            )
+
+            naver_client_secret = st.text_input(
+                "Client Secret",
+                value=naver.get("client_secret", ""),
+                type="password",
+                key="naver_client_secret",
+                help="Naver Developers에서 발급받은 Client Secret",
+            )
+
+            if st.button("💾 Naver 설정 저장", key="save_naver"):
+                success = update_naver_settings(
+                    client_id=naver_client_id,
+                    client_secret=naver_client_secret,
+                    enabled=naver_enabled,
+                )
+                if success:
+                    st.success("Naver 설정 저장 완료!")
+                else:
+                    st.error("Naver 설정 저장 실패")
 
 
 # ── 메인 앱 ───────────────────────────────────────────────────────────────────
@@ -117,6 +207,9 @@ def main():
             value=True,
             help="DuckDuckGo + Google News RSS 검색에서 기사를 찾지 못할 경우 Gemini를 사용해 추가 검색합니다.",
         )
+
+        # ── 검색 소스 설정 패널 ───────────────────────────────────────────
+        render_settings_panel()
 
         search_clicked = st.button("🔍 뉴스 검색", use_container_width=True, type="primary")
 
