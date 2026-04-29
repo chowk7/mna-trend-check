@@ -17,10 +17,10 @@ SETTINGS_FILE = "settings.json"
 
 # 기본값 (플랫 키 구조 - server.py와 호환)
 DEFAULT_SETTINGS = {
-    "cse_api_key": "",
-    "cse_cx": "",
-    "naver_client_id": "",
-    "naver_client_secret": "",
+    "cse_api_key": "AIzaSyDLPbiIhfTeIaFP2JPaC3vEBpowOwKYhVA",
+    "cse_cx": "620f073b5bf414784",
+    "naver_client_id": "_jOicpv_8TEwG0M3VpLK",
+    "naver_client_secret": "KmUiTp1kgi",
 }
 
 
