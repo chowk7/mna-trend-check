@@ -17,6 +17,8 @@
   --badge-ddg: #f59e0b;
   --badge-rss: #3b82f6;
   --badge-gemini: #8b5cf6;
+  --badge-cse: #10b981;
+  --badge-naver: #03c75a;
   --sidebar-width: 320px;
   --radius: 8px;
 }
@@ -175,6 +177,85 @@ input[type="range"] {
   line-height: 1.5;
 }
 
+/* ── Panel subtitle ─────────────────────────────────────────── */
+.panel-subtitle {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: -4px;
+}
+
+/* ── Source List ────────────────────────────────────────────── */
+.source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.source-details {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.source-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  background: #f8fafc;
+  list-style: none;
+  user-select: none;
+}
+
+.source-summary::-webkit-details-marker { display: none; }
+
+.source-summary::before {
+  content: '▶';
+  font-size: 9px;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.source-details[open] .source-summary::before { transform: rotate(90deg); }
+
+.source-summary input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.source-label { flex: 1; }
+
+.unavail-badge {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-light);
+  background: #f1f5f9;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 400;
+}
+
+.source-body {
+  padding: 7px 8px;
+  background: #fff;
+}
+
+.source-body textarea {
+  font-size: 11.5px;
+  resize: vertical;
+  min-height: 48px;
+}
+
+.source-details.source-unavailable .source-label { color: var(--text-light); }
+.source-details.source-unavailable textarea { background: #f8fafc; color: var(--text-light); }
+
 /* ── Format Details ─────────────────────────────────────────── */
 .format-details {
   border: 1px solid var(--border);
@@ -293,6 +374,8 @@ input[type="range"] {
 .badge-ddg { background: var(--badge-ddg); }
 .badge-rss { background: var(--badge-rss); }
 .badge-gemini { background: var(--badge-gemini); }
+.badge-cse { background: var(--badge-cse); }
+.badge-naver { background: var(--badge-naver); }
 
 /* ── Article List ───────────────────────────────────────────── */
 .articles-header {

@@ -11,6 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from news_fetcher import DEFAULT_KEYWORDS
+from alternative_fetcher import _build_ddg_query
+from cse_fetcher import DEFAULT_KEYWORDS_CSE
+from naver_fetcher import DEFAULT_KEYWORDS_NAVER
 from orchestrator import search_all_sources
 from secret_manager import get_gemini_api_key
 from summarizer import summarize_article, summarize_with_content
@@ -24,6 +27,12 @@ app = FastAPI(title="M&A 뉴스 요약기")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 _api_key_cache: str | None = None
+
+# CSE / Naver 환경변수
+CSE_API_KEY = os.environ.get("GOOGLE_CSE_API_KEY", "")
+CSE_CX = os.environ.get("GOOGLE_CSE_CX", "")
+NAVER_CLIENT_ID = os.environ.get("NAVER_CLIENT_ID", "")
+NAVER_CLIENT_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
 
 
 def _load_api_key() -> str:
@@ -75,13 +84,36 @@ MODELS = [
     {"id": "gemini-2.0-flash", "label": "gemini-2.0-flash (지원 종료 예정)"},
 ]
 
+_DEFAULT_DDG_KEYWORDS = "acquire divest merger acquisition"
+
 
 @app.get("/api/config")
 async def get_config():
     return {
         "default_format": DEFAULT_FORMAT,
-        "default_keywords": DEFAULT_KEYWORDS,
         "models": MODELS,
+        "sources": {
+            "rss": {
+                "label": "Google News RSS",
+                "available": True,
+                "default_keywords": DEFAULT_KEYWORDS,
+            },
+            "ddg": {
+                "label": "DuckDuckGo",
+                "available": True,
+                "default_keywords": _DEFAULT_DDG_KEYWORDS,
+            },
+            "cse": {
+                "label": "Google CSE",
+                "available": bool(CSE_API_KEY and CSE_CX),
+                "default_keywords": DEFAULT_KEYWORDS_CSE,
+            },
+            "naver": {
+                "label": "Naver 뉴스",
+                "available": bool(NAVER_CLIENT_ID and NAVER_CLIENT_SECRET),
+                "default_keywords": DEFAULT_KEYWORDS_NAVER,
+            },
+        },
     }
 
 
@@ -90,12 +122,17 @@ async def root():
     return HTMLResponse(content=(STATIC_DIR / "index.html").read_text(encoding="utf-8"))
 
 
+class SourceConfig(BaseModel):
+    enabled: bool = True
+    keywords: str | None = None
+
+
 class SearchRequest(BaseModel):
     start_date: str
     end_date: str
     max_results: int = 30
-    keywords: str | None = None
     use_gemini_fallback: bool = True
+    source_configs: dict[str, SourceConfig] = {}
 
 
 @app.post("/api/search")
@@ -119,9 +156,13 @@ async def search(req: SearchRequest):
         after_date=after,
         before_date=before,
         max_results=req.max_results,
-        keywords=req.keywords or None,
+        source_configs={k: v.model_dump() for k, v in req.source_configs.items()},
         api_key=api_key,
         use_gemini_fallback=req.use_gemini_fallback,
+        cse_api_key=CSE_API_KEY,
+        cse_cx=CSE_CX,
+        naver_client_id=NAVER_CLIENT_ID,
+        naver_client_secret=NAVER_CLIENT_SECRET,
     )
 
     for a in articles:

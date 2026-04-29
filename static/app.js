@@ -18,7 +18,6 @@ const dom = {
   endDate:          $('end-date'),
   maxResults:       $('max-results'),
   maxResultsValue:  $('max-results-value'),
-  keywords:         $('keywords'),
   geminiFallback:   $('gemini-fallback'),
   searchBtn:        $('search-btn'),
   model:            $('model'),
@@ -37,6 +36,12 @@ const dom = {
   progressFill:     $('progress-fill'),
   summariesSection: $('summaries-section'),
   summaryList:      $('summary-list'),
+  sources: {
+    rss:   { wrap: $('src-rss'),   kw: $('kw-rss'),   en: $('en-rss')   },
+    ddg:   { wrap: $('src-ddg'),   kw: $('kw-ddg'),   en: $('en-ddg')   },
+    cse:   { wrap: $('src-cse'),   kw: $('kw-cse'),   en: $('en-cse')   },
+    naver: { wrap: $('src-naver'), kw: $('kw-naver'), en: $('en-naver') },
+  },
 };
 
 // ── Utilities ─────────────────────────────────────────────────
@@ -49,16 +54,20 @@ function escHtml(str) {
 }
 
 function sourceBadgeClass(src) {
-  if (src === 'DuckDuckGo')    return 'badge-ddg';
+  if (src === 'DuckDuckGo')      return 'badge-ddg';
   if (src === 'Google News RSS') return 'badge-rss';
-  if (src === 'Gemini Search')  return 'badge-gemini';
+  if (src === 'Google CSE')      return 'badge-cse';
+  if (src === 'Naver News')      return 'badge-naver';
+  if (src === 'Gemini Search')   return 'badge-gemini';
   return '';
 }
 
 function sourceBadgeLabel(src) {
-  if (src === 'DuckDuckGo')    return 'DDG';
+  if (src === 'DuckDuckGo')      return 'DDG';
   if (src === 'Google News RSS') return 'RSS';
-  if (src === 'Gemini Search')  return 'Gemini';
+  if (src === 'Google CSE')      return 'CSE';
+  if (src === 'Naver News')      return 'Naver';
+  if (src === 'Gemini Search')   return 'Gemini';
   return src;
 }
 
@@ -224,6 +233,15 @@ async function handleSearch() {
 
   setLoading(dom.searchBtn, true, '🔍 뉴스 검색');
 
+  // Build per-source config
+  const source_configs = {};
+  for (const [key, s] of Object.entries(dom.sources)) {
+    source_configs[key] = {
+      enabled: s.en.checked,
+      keywords: s.kw.value.trim() || null,
+    };
+  }
+
   try {
     const res = await apiFetch('/api/search', {
       method: 'POST',
@@ -231,8 +249,8 @@ async function handleSearch() {
         start_date: dom.startDate.value,
         end_date:   dom.endDate.value,
         max_results: parseInt(dom.maxResults.value, 10),
-        keywords: dom.keywords.value.trim() || null,
         use_gemini_fallback: dom.geminiFallback.checked,
+        source_configs,
       }),
     });
 
@@ -434,11 +452,25 @@ async function init() {
       .map((m) => `<option value="${escHtml(m.id)}">${escHtml(m.label)}</option>`)
       .join('');
 
-    dom.keywords.value     = config.default_keywords ?? '';
     dom.customFormat.value = config.default_format ?? '';
+
+    // Initialize per-source keyword fields
+    const sources = config.sources ?? {};
+    for (const [key, info] of Object.entries(sources)) {
+      const s = dom.sources[key];
+      if (!s) continue;
+      s.kw.value = info.default_keywords ?? '';
+      if (!info.available) {
+        s.en.checked = false;
+        s.en.disabled = true;
+        s.kw.disabled = true;
+        s.wrap.classList.add('source-unavailable');
+        const badge = document.getElementById(`badge-${key}`);
+        if (badge) badge.style.display = 'inline';
+      }
+    }
   } catch (err) {
     console.error('Config load failed:', err);
-    dom.keywords.value = '"to acquire" OR "to divest" OR "joint venture"';
   }
 
   // Event listeners
@@ -449,11 +481,6 @@ async function init() {
   dom.downloadBtn.addEventListener('click', handleDownload);
   dom.selectAllBtn.addEventListener('click', handleSelectAll);
   dom.deselectAllBtn.addEventListener('click', handleDeselectAll);
-
-  // Ctrl+Enter in keywords triggers search
-  dom.keywords.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSearch();
-  });
 }
 
 document.addEventListener('DOMContentLoaded', init);
