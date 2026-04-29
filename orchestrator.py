@@ -7,7 +7,6 @@ from datetime import date, datetime, timedelta
 from news_fetcher import fetch_articles
 from alternative_fetcher import fetch_articles_ddg
 from summarizer import search_articles_gemini
-from settings_manager import get_cse_settings, get_naver_settings
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +20,11 @@ def search_all_sources(
     keywords: str | None = None,
     api_key: str | None = None,
     use_gemini_fallback: bool = True,
+    source_configs: dict | None = None,
+    cse_api_key: str = "",
+    cse_cx: str = "",
+    naver_client_id: str = "",
+    naver_client_secret: str = "",
 ) -> tuple[list[dict], dict[str, int]]:
     """
     DuckDuckGo + Google News RSS + Google CSE + Naver News를 병렬로 검색하고 결과를 합칩니다.
@@ -36,9 +40,9 @@ def search_all_sources(
     cse_articles: list[dict] = []
     naver_articles: list[dict] = []
 
-    # 설정에서 Google CSE / Naver News 활성화 상태 확인
-    cse_enabled = get_cse_settings().get("enabled", False)
-    naver_enabled = get_naver_settings().get("enabled", False)
+    # 소스 활성화 상태 (source_configs 또는 기존 설정에서 확인)
+    cse_enabled = bool(cse_api_key and cse_cx)
+    naver_enabled = bool(naver_client_id and naver_client_secret)
 
     # DuckDuckGo + RSS 병렬 실행
     with ThreadPoolExecutor(max_workers=4) as executor:
@@ -49,37 +53,33 @@ def search_all_sources(
 
         # Google CSE 추가 (활성화 시)
         if cse_enabled:
-            cse = get_cse_settings()
-            if cse.get("api_key") and cse.get("search_engine_id"):
-                from naver_fetcher import fetch_articles_google_cse
-                futures[
-                    executor.submit(
-                        fetch_articles_google_cse,
-                        cse["api_key"],
-                        cse["search_engine_id"],
-                        after_date,
-                        before_date,
-                        max_results,
-                        keywords,
-                    )
-                ] = "cse"
+            from cse_fetcher import fetch_articles_cse
+            futures[
+                executor.submit(
+                    fetch_articles_cse,
+                    after_date,
+                    before_date,
+                    max_results,
+                    keywords,
+                    cse_api_key,
+                    cse_cx,
+                )
+            ] = "cse"
 
         # Naver News 추가 (활성화 시)
         if naver_enabled:
-            naver = get_naver_settings()
-            if naver.get("client_id") and naver.get("client_secret"):
-                from naver_fetcher import fetch_articles_naver
-                futures[
-                    executor.submit(
-                        fetch_articles_naver,
-                        naver["client_id"],
-                        naver["client_secret"],
-                        after_date,
-                        before_date,
-                        max_results,
-                        keywords,
-                    )
-                ] = "naver"
+            from naver_fetcher import fetch_articles_naver
+            futures[
+                executor.submit(
+                    fetch_articles_naver,
+                    naver_client_id,
+                    naver_client_secret,
+                    after_date,
+                    before_date,
+                    max_results,
+                    keywords,
+                )
+            ] = "naver"
 
         for future in as_completed(futures):
             source = futures[future]
