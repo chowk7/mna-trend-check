@@ -14,19 +14,21 @@ _MAX_RETRIES = 3
 
 
 def summarize_article(
-    url: str,
+    url: str | None,
     custom_format: str,
     api_key: str,
     model: str = _DEFAULT_MODEL,
+    direct_text: str | None = None,
 ) -> str:
     """
     url_context 도구를 이용해 Gemini가 URL을 직접 fetch하고 요약합니다.
+    또는 직접 텍스트를 입력받아 요약할 수도 있습니다.
 
     Returns:
         요약 텍스트 또는 오류 메시지 문자열.
     """
     client = genai.Client(api_key=api_key)
-    prompt = _build_prompt(url, custom_format)
+    prompt = _build_prompt(url, custom_format, direct_text)
 
     for attempt in range(_MAX_RETRIES):
         try:
@@ -175,8 +177,17 @@ def _parse_date_str(date_str: str) -> datetime | None:
     return None
 
 
-def _build_prompt(url: str, custom_format: str) -> str:
-    return f"""다음 URL의 기사를 읽고, 제공된 예시 양식에 맞춰 요약해 주세요.
+def _build_prompt(url: str | None, custom_format: str, direct_text: str | None = None) -> str:
+    if direct_text:
+        return f"""다음 기사의 내용을 읽고, 제공된 예시 양식에 맞춰 요약해 주세요.
+
+[기사 내용]
+{direct_text}
+
+[예시 양식 및 규칙]
+{custom_format}"""
+    else:
+        return f"""다음 URL의 기사를 읽고, 제공된 예시 양식에 맞춰 요약해 주세요.
 
 [기사 URL]
 {url}
