@@ -779,3 +779,92 @@ input[type="range"] {
   font-size: 12px;
   color: var(--text-muted);
 }
+
+/* ── Deal Cards ─────────────────────────────────────────────── */
+
+.deal-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.deal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  cursor: pointer;
+  user-select: none;
+}
+
+.deal-header:hover {
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+}
+
+.deal-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.deal-icon {
+  font-size: 18px;
+}
+
+.deal-companies {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deal-company {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deal-arrow {
+  color: var(--primary);
+  font-weight: bold;
+}
+
+.deal-count {
+  background: var(--primary);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.deal-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deal-expand-icon {
+  font-size: 12px;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.deal-articles {
+  border-top: 1px solid var(--border);
+  background: #fafbfc;
+}
+
+.ungrouped-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 16px 4px 8px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
