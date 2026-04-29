@@ -21,6 +21,8 @@ def search_all_sources(
     api_key: str | None = None,
     use_gemini_fallback: bool = True,
     source_configs: dict | None = None,
+    equal_per_source: bool = False,
+    per_source_max: int | None = None,
     cse_api_key: str = "",
     cse_cx: str = "",
     naver_client_id: str = "",
@@ -40,15 +42,21 @@ def search_all_sources(
     cse_articles: list[dict] = []
     naver_articles: list[dict] = []
 
-    # 소스 활성화 상태 (source_configs 또는 기존 설정에서 확인)
+    # 소스 활성화 상태
     cse_enabled = bool(cse_api_key and cse_cx)
     naver_enabled = bool(naver_client_id and naver_client_secret)
+
+    # 소스별 max_results 계산
+    if equal_per_source and per_source_max:
+        ddg_max = rss_max = cse_max = naver_max = per_source_max
+    else:
+        ddg_max = rss_max = cse_max = naver_max = max_results
 
     # DuckDuckGo + RSS 병렬 실행
     with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {
-            executor.submit(fetch_articles_ddg, after_date, before_date, max_results, keywords): "ddg",
-            executor.submit(fetch_articles, after_date, before_date, max_results, keywords): "rss",
+            executor.submit(fetch_articles_ddg, after_date, before_date, ddg_max, keywords): "ddg",
+            executor.submit(fetch_articles, after_date, before_date, rss_max, keywords): "rss",
         }
 
         # Google CSE 추가 (활성화 시)
@@ -59,7 +67,7 @@ def search_all_sources(
                     fetch_articles_cse,
                     after_date,
                     before_date,
-                    max_results,
+                    cse_max,
                     keywords,
                     cse_api_key,
                     cse_cx,
@@ -76,7 +84,7 @@ def search_all_sources(
                     naver_client_secret,
                     after_date,
                     before_date,
-                    max_results,
+                    naver_max,
                     keywords,
                 )
             ] = "naver"
