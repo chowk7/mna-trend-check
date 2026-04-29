@@ -492,6 +492,9 @@ async function handleManualSummarize() {
   const content  = $('manual-content')?.value.trim() ?? '';
   const statusEl = $('manual-status');
   const btn      = $('manual-summarize-btn');
+  const titleEl = $('manual-title');
+  const urlEl   = $('manual-url');
+  const contentEl = $('manual-content');
 
   if (!content) {
     if (statusEl) { statusEl.textContent = '기사 내용을 입력해 주세요.'; statusEl.style.color = 'var(--danger)'; }
@@ -516,6 +519,12 @@ async function handleManualSummarize() {
     state.summaries[displayUrl] = data.summary;
     renderSummary(displayUrl, displayTitle, data.summary);
     if (statusEl) { statusEl.textContent = '요약 완료!'; statusEl.style.color = 'var(--success, #16a34a)'; }
+    
+    // Clear inputs for next use
+    if (titleEl)   titleEl.value = '';
+    if (urlEl)     urlEl.value = '';
+    if (contentEl) contentEl.value = '';
+    
     setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
   } catch (err) {
     if (statusEl) { statusEl.textContent = `오류: ${err.message}`; statusEl.style.color = 'var(--danger)'; }
