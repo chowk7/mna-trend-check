@@ -64,6 +64,154 @@ function on(id, event, fn) {
   if (el) el.addEventListener(event, fn);
 }
 
+// ── Deal Grouping ─────────────────────────────────────────────
+
+const DEAL_PATTERNS = [
+  /([A-Z][A-Za-z\s&'.,-]+)\s+(?:to\s+acquire|acquir| übernimmt| acquires|compra|매수|인수|합병|인수합병)\s+([A-Z][A-Za-z\s&'.,-]+)/i,
+  /([A-Z][A-Za-z\s&'.,-]+)\s+(?:to\s+divest|divest|sells?|매각|매도|양도)\s+([A-Z][A-Za-z\s&'.,-]+)/i,
+  /([A-Z][A-Za-z\s&'.,-]+)\s+(?:joint\s+venture|M&A|merger|합병)\s+(?:with\s+)?([A-Z][A-Za-z\s&'.,-]+)/i,
+  /([A-Z][A-Za-z\s&'.,-]+)\s+(?:and|c와|과)\s+([A-Z][A-Za-z\s&'.,-]+)\s+(?:in\s+)?(?:a\s+)?(?:deal|transaction)/i,
+];
+
+function extractDealKey(title) {
+  for (const pattern of DEAL_PATTERNS) {
+    const match = title.match(pattern);
+    if (match && match[1] && match[2]) {
+      const a = match[1].trim().toLowerCase().replace(/\s+/g, ' ');
+      const b = match[2].trim().toLowerCase().replace(/\s+/g, ' ');
+      return [a, b].sort().join('|||');
+    }
+  }
+  return null;
+}
+
+function extractCompanies(title) {
+  for (const pattern of DEAL_PATTERNS) {
+    const match = title.match(pattern);
+    if (match && match[1] && match[2]) {
+      return { companyA: match[1].trim(), companyB: match[2].trim() };
+    }
+  }
+  return null;
+}
+
+function groupArticlesByDeal(articles) {
+  const deals = new Map();
+  const ungrouped = [];
+
+  for (const article of articles) {
+    const dealKey = extractDealKey(article.title);
+    if (dealKey) {
+      if (!deals.has(dealKey)) {
+        const companies = extractCompanies(article.title);
+        deals.set(dealKey, {
+          key: dealKey,
+          companyA: companies?.companyA || 'Unknown',
+          companyB: companies?.companyB || 'Unknown',
+          articles: [],
+          sources: new Set(),
+        });
+      }
+      const deal = deals.get(dealKey);
+      deal.articles.push(article);
+      if (article.search_source) deal.sources.add(article.search_source);
+    } else {
+      ungrouped.push(article);
+    }
+  }
+
+  return {
+    deals: Array.from(deals.values()).sort((a, b) => b.articles.length - a.articles.length),
+    ungrouped,
+  };
+}
+
+function renderDealCard(deal, index) {
+  const sourceBadges = Array.from(deal.sources).map(src =>
+    `<span class="article-src-badge ${sourceBadgeClass(src)}">${sourceBadgeLabel(src)}</span>`
+  ).join('');
+
+  return `
+    <div class="deal-card" data-deal-index="${index}">
+      <div class="deal-header" onclick="toggleDeal(${index})">
+        <div class="deal-info">
+          <span class="deal-icon">🤝</span>
+          <div class="deal-companies">
+            <span class="deal-company">${escHtml(deal.companyA)}</span>
+            <span class="deal-arrow">→</span>
+            <span class="deal-company">${escHtml(deal.companyB)}</span>
+          </div>
+          <span class="deal-count">${deal.articles.length}건</span>
+        </div>
+        <div class="deal-meta">
+          ${sourceBadges}
+          <span class="deal-expand-icon" id="deal-icon-${index}">▼</span>
+        </div>
+      </div>
+      <div class="deal-articles" id="deal-articles-${index}" style="display:none">
+        ${deal.articles.map(a => renderArticleItem(a)).join('')}
+      </div>
+    </div>`;
+}
+
+function renderArticleItem(a) {
+  const srcClass = sourceBadgeClass(a.search_source);
+  const srcLabel = sourceBadgeLabel(a.search_source);
+  const isSelected = state.selected.has(a.url);
+  return `
+    <div class="article-card${isSelected ? ' selected' : ''}" data-url="${escHtml(a.url)}">
+      <input type="checkbox" data-url="${escHtml(a.url)}"${isSelected ? ' checked' : ''}>
+      <div class="article-body">
+        <div class="article-meta">
+          ${a.search_source ? `<span class="article-src-badge ${srcClass}">${srcLabel}</span>` : ''}
+          ${a.source        ? `<span class="article-source">${escHtml(a.source)}</span>` : ''}
+          ${a.published     ? `<span class="article-date">${escHtml(a.published)}</span>` : ''}
+        </div>
+        <a class="article-title" href="${escHtml(a.url)}" target="_blank" rel="noopener noreferrer">
+          ${escHtml(a.title)}
+        </a>
+        ${a.snippet ? `<p class="article-snippet">${escHtml(a.snippet)}</p>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderUngroupedArticle(a, globalIndex) {
+  const srcClass = sourceBadgeClass(a.search_source);
+  const srcLabel = sourceBadgeLabel(a.search_source);
+  const isSelected = state.selected.has(a.url);
+  return `
+    <div class="article-card${isSelected ? ' selected' : ''}" data-idx="${globalIndex}">
+      <input type="checkbox" data-url="${escHtml(a.url)}"${isSelected ? ' checked' : ''}>
+      <div class="article-body">
+        <div class="article-meta">
+          ${a.search_source ? `<span class="article-src-badge ${srcClass}">${srcLabel}</span>` : ''}
+          ${a.source        ? `<span class="article-source">${escHtml(a.source)}</span>` : ''}
+          ${a.published     ? `<span class="article-date">${escHtml(a.published)}</span>` : ''}
+        </div>
+        <a class="article-title" href="${escHtml(a.url)}" target="_blank" rel="noopener noreferrer">
+          ${escHtml(a.title)}
+        </a>
+        ${a.snippet ? `<p class="article-snippet">${escHtml(a.snippet)}</p>` : ''}
+      </div>
+    </div>`;
+}
+
+function toggleDeal(index) {
+  const articlesDiv = document.getElementById(`deal-articles-${index}`);
+  const icon = document.getElementById(`deal-icon-${index}`);
+  if (!articlesDiv) return;
+  
+  if (articlesDiv.style.display === 'none') {
+    articlesDiv.style.display = 'block';
+    if (icon) icon.textContent = '▲';
+  } else {
+    articlesDiv.style.display = 'none';
+    if (icon) icon.textContent = '▼';
+  }
+}
+
+window.toggleDeal = toggleDeal;
+
 // ── API ───────────────────────────────────────────────────────
 async function apiFetch(url, options = {}) {
   const res = await fetch(url, {
@@ -112,28 +260,36 @@ function renderSourceCounts(counts) {
 function renderArticles() {
   if (!dom.articleList) return;
   const articles = state.articles;
-  if (dom.articlesTitle) dom.articlesTitle.textContent = `기사 목록 (${articles.length}건)`;
+  
+  // 딜 그룹핑
+  const { deals, ungrouped } = groupArticlesByDeal(articles);
+  
+  if (dom.articlesTitle) {
+    if (deals.length > 0) {
+      dom.articlesTitle.textContent = `📊 딜 ${deals.length}개 · 기사 ${articles.length}건`;
+    } else {
+      dom.articlesTitle.textContent = `기사 목록 (${articles.length}건)`;
+    }
+  }
 
-  dom.articleList.innerHTML = articles.map((a, i) => {
-    const srcClass = sourceBadgeClass(a.search_source);
-    const srcLabel = sourceBadgeLabel(a.search_source);
-    const isSelected = state.selected.has(a.url);
-    return `
-      <div class="article-card${isSelected ? ' selected' : ''}" data-idx="${i}">
-        <input type="checkbox" data-url="${escHtml(a.url)}"${isSelected ? ' checked' : ''}>
-        <div class="article-body">
-          <div class="article-meta">
-            ${a.search_source ? `<span class="article-src-badge ${srcClass}">${srcLabel}</span>` : ''}
-            ${a.source        ? `<span class="article-source">${escHtml(a.source)}</span>` : ''}
-            ${a.published     ? `<span class="article-date">${escHtml(a.published)}</span>` : ''}
-          </div>
-          <a class="article-title" href="${escHtml(a.url)}" target="_blank" rel="noopener noreferrer">
-            ${escHtml(a.title)}
-          </a>
-          ${a.snippet ? `<p class="article-snippet">${escHtml(a.snippet)}</p>` : ''}
-        </div>
-      </div>`;
-  }).join('');
+  let html = '';
+  
+  // 딜 카드 렌더링
+  deals.forEach((deal, index) => {
+    html += renderDealCard(deal, index);
+  });
+  
+  // 그룹화되지 않은 기스는 일반 목록으로
+  if (ungrouped.length > 0) {
+    if (deals.length > 0) {
+      html += `<div class="ungrouped-header">📰 개별 기사 (${ungrouped.length}건)</div>`;
+    }
+    ungrouped.forEach((a, i) => {
+      html += renderUngroupedArticle(a, i);
+    });
+  }
+
+  dom.articleList.innerHTML = html;
 
   if (dom.results)    dom.results.style.display = 'block';
   if (dom.emptyState) dom.emptyState.style.display = 'none';
