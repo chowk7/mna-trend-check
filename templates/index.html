@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M&A 뉴스 요약기</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 헤더 -->
+        <header>
+            <h1>📰 M&A 뉴스 요약기</h1>
+        </header>
+
+        <main>
+            <!-- 사이드바 -->
+            <aside class="sidebar">
+                <h2>검색 설정</h2>
+
+                <!-- 날짜 설정 -->
+                <div class="setting-group">
+                    <label>시작 날짜</label>
+                    <input type="date" id="start-date">
+                </div>
+                <div class="setting-group">
+                    <label>종료 날짜</label>
+                    <input type="date" id="end-date">
+                </div>
+
+                <!-- 최대 결과 수 -->
+                <div class="setting-group">
+                    <label>최대 기사 수</label>
+                    <input type="range" id="max-results" min="10" max="100" value="30" step="10">
+                    <span id="max-results-label">30</span>
+                </div>
+
+                <!-- 키워드 -->
+                <div class="setting-group">
+                    <label>검색 키워드 (OR로 연결)</label>
+                    <textarea id="keywords" rows="4" placeholder="예: merger OR acquisition"></textarea>
+                </div>
+
+                <!-- Gemini 폴백 -->
+                <div class="setting-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="use-gemini-fallback" checked>
+                        Gemini 검색 폴백 사용
+                    </label>
+                </div>
+
+                <button id="search-btn" class="btn-primary">🔍 뉴스 검색</button>
+
+                <hr>
+
+                <!-- 검색 소스 설정 -->
+                <h3>⚙️ 검색 소스 설정</h3>
+
+                <!-- Google CSE -->
+                <div class="source-section">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="cse-enabled">
+                        Google CSE 사용
+                    </label>
+                    <input type="password" id="cse-api-key" placeholder="API Key">
+                    <input type="text" id="cse-engine-id" placeholder="Search Engine ID (cx)">
+                    <button class="btn-save" onclick="saveCSE()">💾 CSE 저장</button>
+                </div>
+
+                <!-- Naver News -->
+                <div class="source-section">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="naver-enabled">
+                        Naver 뉴스 사용
+                    </label>
+                    <input type="text" id="naver-client-id" placeholder="Client ID">
+                    <input type="password" id="naver-client-secret" placeholder="Client Secret">
+                    <button class="btn-save" onclick="saveNaver()">💾 Naver 저장</button>
+                </div>
+
+                <hr>
+
+                <!-- 직접 입력 요약 -->
+                <h3>📝 직접 입력 요약</h3>
+                <input type="url" id="direct-url" placeholder="기사 URL 입력">
+                <textarea id="direct-text" rows="4" placeholder="또는 기사 내용을 직접 입력"></textarea>
+                <button class="btn-summarize" onclick="summarizeDirect()">✨ 요약하기</button>
+            </aside>
+
+            <!-- 메인 콘텐츠 -->
+            <section class="content">
+                <!-- 로딩 스피너 -->
+                <div id="loading" class="loading hidden">
+                    <div class="spinner"></div>
+                    <p>처리 중...</p>
+                </div>
+
+                <!-- 소스별 건수 -->
+                <div id="source-counts" class="source-counts hidden"></div>
+
+                <!-- 기사 목록 -->
+                <div id="articles-section" class="hidden">
+                    <div class="section-header">
+                        <h2>검색된 기사 목록 (<span id="article-count">0</span>건)</h2>
+                        <div class="btn-group">
+                            <button class="btn-small" onclick="selectAll()">전체 선택</button>
+                            <button class="btn-small" onclick="deselectAll()">전체 해제</button>
+                        </div>
+                    </div>
+                    <div id="articles-list"></div>
+                </div>
+
+                <!-- 요약 양식 설정 -->
+                <div id="summary-format-section" class="hidden">
+                    <h2>요약 양식 설정</h2>
+                    <textarea id="summary-format" rows="12">[예시 1번]
+(10/22일, 반도체) 韓세미파이브 IPO 절차 진행 중, 예상 시가총액 0.7~0.8兆 수준
+ㅡ 17日 韓 맞춤형 반도체 설계업체 세미파이브(최대주주 美SiFive社 18% 보유)는 코스닥 상장위한 증권신고서 제출
+
+[양식]
+(기사날짜, 카테고리) 어떤업체가 어떤 업체를 얼마에 인수/매각하는지 기술
+ㅡ 인수업체가 왜 인수하는지 한 문장으로 기술
+
+[규칙]
+ㅡ 말투는 명사로 끝나는 문어체
+ㅡ 한국회사 제외 영어로 회사명 표기</textarea>
+
+                    <div class="model-select">
+                        <label>Gemini 모델:</label>
+                        <select id="model-choice">
+                            <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                            <option value="gemini-2.5-flash" selected>gemini-2.5-flash</option>
+                            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                        </select>
+                    </div>
+
+                    <button id="summarize-btn" class="btn-primary" onclick="summarizeSelected()">✨ 선택된 기사 요약</button>
+                </div>
+
+                <!-- 요약 결과 -->
+                <div id="summary-section" class="hidden">
+                    <h2>요약 결과</h2>
+                    <div id="summary-list"></div>
+                    <button class="btn-download" onclick="downloadAll()">📥 전체 요약 다운로드</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
