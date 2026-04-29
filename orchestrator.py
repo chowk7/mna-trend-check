@@ -126,9 +126,9 @@ def search_all_sources(
         )
         combined = gemini_articles
 
-    # 날짜 내림차순 정렬 (날짜 없는 기사는 마지막), 비영어 기사는 후순위
+    # 날짜 내림차순 정렬 (최신 → 최고), 날짜 없는 기사는 마지막
     combined.sort(key=lambda a: (
-        _is_non_english(a["title"]),
+        a["published_dt"] is None,  # None은 마지막으로
         -(a["published_dt"].timestamp() if a.get("published_dt") else 0),
     ))
 
