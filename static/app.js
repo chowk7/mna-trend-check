@@ -10,6 +10,8 @@ const state = {
   isSummarizing: false,
 };
 
+const ARTICLE_SUMMARY_BATCH_SIZE = 5;
+
 // ── DOM helpers ───────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 
@@ -564,48 +566,53 @@ async function summarizeArticles(articles, startIndex = 0, total = articles.leng
   const customFormat = dom.customFormat?.value ?? '';
   const model = dom.model?.value ?? 'gemini-3-flash-preview';
 
-  try {
-    const res = await apiFetch('/api/summarize', {
-      method: 'POST',
-      body: JSON.stringify({
-        articles: articles,
-        custom_format: customFormat,
-        model: model,
-      }),
-    });
+  for (let batchStart = 0; batchStart < articles.length; batchStart += ARTICLE_SUMMARY_BATCH_SIZE) {
+    const batch = articles.slice(batchStart, batchStart + ARTICLE_SUMMARY_BATCH_SIZE);
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+    try {
+      const res = await apiFetch('/api/summarize', {
+        method: 'POST',
+        body: JSON.stringify({
+          articles: batch,
+          custom_format: customFormat,
+          model: model,
+        }),
+      });
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        let data;
-        try { data = JSON.parse(line.slice(6)); } catch { continue; }
-        if (data.type === 'progress') {
-          const pct = Math.round(((startIndex + data.index + 1) / total) * 100);
-          if (dom.progressFill) dom.progressFill.style.width = `${pct}%`;
-          if (dom.progressText) dom.progressText.textContent =
-            `요약 중... (${startIndex + data.index + 1}/${total}): ${data.title.slice(0, 50)}`;
-        } else if (data.type === 'result') {
-          state.summaries[data.url] = data.summary;
-          renderSummary(data.url, data.title, data.summary);
-        } else if (data.type === 'done') {
-          if (dom.progressFill) dom.progressFill.style.width = '100%';
-          if (dom.progressText) dom.progressText.textContent = '완료!';
-          setTimeout(() => { if (dom.progressSection) dom.progressSection.style.display = 'none'; }, 1500);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let data;
+          try { data = JSON.parse(line.slice(6)); } catch { continue; }
+          if (data.type === 'progress') {
+            const absoluteIndex = startIndex + batchStart + data.index + 1;
+            const pct = Math.round((absoluteIndex / total) * 100);
+            if (dom.progressFill) dom.progressFill.style.width = `${pct}%`;
+            if (dom.progressText) dom.progressText.textContent =
+              `요약 중... (${absoluteIndex}/${total}): ${data.title.slice(0, 50)}`;
+          } else if (data.type === 'result') {
+            state.summaries[data.url] = data.summary;
+            renderSummary(data.url, data.title, data.summary);
+          }
         }
       }
+    } catch (err) {
+      throw err;
     }
-  } catch (err) {
-    throw err;
   }
+
+  if (dom.progressFill) dom.progressFill.style.width = '100%';
+  if (dom.progressText) dom.progressText.textContent = '완료!';
+  setTimeout(() => { if (dom.progressSection) dom.progressSection.style.display = 'none'; }, 1500);
 }
 
 // ── Download ──────────────────────────────────────────────────
