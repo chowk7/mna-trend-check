@@ -10,7 +10,7 @@ from summarizer import search_articles_gemini
 
 logger = logging.getLogger(__name__)
 
-_SOURCE_PRIORITY = {"DuckDuckGo": 0, "Google News RSS": 1, "Gemini Search": 2}
+_SOURCE_PRIORITY = {"DuckDuckGo": 0, "Google News RSS": 1, "Google CSE": 2, "Naver News": 3, "Gemini Search": 4}
 
 
 def search_all_sources(
@@ -20,25 +20,75 @@ def search_all_sources(
     keywords: str | None = None,
     api_key: str | None = None,
     use_gemini_fallback: bool = True,
+    source_configs: dict | None = None,
+    equal_per_source: bool = False,
+    per_source_max: int | None = None,
+    cse_api_key: str = "",
+    cse_cx: str = "",
+    naver_client_id: str = "",
+    naver_client_secret: str = "",
 ) -> tuple[list[dict], dict[str, int]]:
     """
-    DuckDuckGo + Google News RSS를 병렬로 검색하고 결과를 합칩니다.
-    두 소스 모두 결과가 없으면 Gemini google_search로 폴백합니다.
+    DuckDuckGo + Google News RSS + Google CSE + Naver News를 병렬로 검색하고 결과를 합칩니다.
+    모든 소스 결과가 없으면 Gemini google_search로 폴백합니다.
 
     Returns:
         (articles, source_counts)
         - articles: 중복 제거 후 정렬된 기사 리스트
-        - source_counts: {"DuckDuckGo": n, "Google News RSS": n, "Gemini Search": n}
+        - source_counts: 각 소스별 수집 건수
     """
     ddg_articles: list[dict] = []
     rss_articles: list[dict] = []
+    cse_articles: list[dict] = []
+    naver_articles: list[dict] = []
+
+    # 소스 활성화 상태
+    cse_enabled = bool(cse_api_key and cse_cx)
+    naver_enabled = bool(naver_client_id and naver_client_secret)
+
+    # 소스별 max_results 계산
+    if equal_per_source and per_source_max:
+        ddg_max = rss_max = cse_max = naver_max = per_source_max
+    else:
+        ddg_max = rss_max = cse_max = naver_max = max_results
 
     # DuckDuckGo + RSS 병렬 실행
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {
-            executor.submit(fetch_articles_ddg, after_date, before_date, max_results, keywords): "ddg",
-            executor.submit(fetch_articles, after_date, before_date, max_results, keywords): "rss",
+            executor.submit(fetch_articles_ddg, after_date, before_date, ddg_max, keywords): "ddg",
+            executor.submit(fetch_articles, after_date, before_date, rss_max, keywords): "rss",
         }
+
+        # Google CSE 추가 (활성화 시)
+        if cse_enabled:
+            from cse_fetcher import fetch_articles_cse
+            futures[
+                executor.submit(
+                    fetch_articles_cse,
+                    after_date,
+                    before_date,
+                    cse_max,
+                    keywords,
+                    cse_api_key,
+                    cse_cx,
+                )
+            ] = "cse"
+
+        # Naver News 추가 (활성화 시)
+        if naver_enabled:
+            from naver_fetcher import fetch_articles_naver
+            futures[
+                executor.submit(
+                    fetch_articles_naver,
+                    naver_client_id,
+                    naver_client_secret,
+                    after_date,
+                    before_date,
+                    naver_max,
+                    keywords,
+                )
+            ] = "naver"
+
         for future in as_completed(futures):
             source = futures[future]
             try:
@@ -49,19 +99,23 @@ def search_all_sources(
 
             if source == "ddg":
                 ddg_articles = result
-            else:
-                # RSS 기사에 search_source 태그 추가
+            elif source == "rss":
                 for a in result:
                     a.setdefault("search_source", "Google News RSS")
                 rss_articles = result
+            elif source == "cse":
+                cse_articles = result
+            elif source == "naver":
+                naver_articles = result
 
-    combined = ddg_articles + rss_articles
+    # 모든 결과 합치기
+    combined = ddg_articles + rss_articles + cse_articles + naver_articles
     combined = _deduplicate(combined)
 
-    # 두 소스 모두 빈 결과 → Gemini 폴백
+    # 모든 소스 결과 없음 → Gemini 폴백
     gemini_articles: list[dict] = []
     if not combined and use_gemini_fallback and api_key:
-        logger.info("기본 소스 결과 없음 → Gemini 검색 폴백 실행")
+        logger.info("모든 소스 결과 없음 → Gemini 검색 폴백 실행")
         kw = keywords.strip() if keywords and keywords.strip() else '"to acquire" OR "to divest" OR "joint venture"'
         gemini_articles = search_articles_gemini(
             keywords=kw,
@@ -72,9 +126,9 @@ def search_all_sources(
         )
         combined = gemini_articles
 
-    # 날짜 내림차순 정렬 (날짜 없는 기사는 마지막), 비영어 기사는 후순위
+    # 날짜 내림차순 정렬 (최신 → 최고), 날짜 없는 기사는 마지막
     combined.sort(key=lambda a: (
-        _is_non_english(a["title"]),
+        a["published_dt"] is None,  # None은 마지막으로
         -(a["published_dt"].timestamp() if a.get("published_dt") else 0),
     ))
 
@@ -83,6 +137,8 @@ def search_all_sources(
     source_counts = {
         "DuckDuckGo": sum(1 for a in combined if a.get("search_source") == "DuckDuckGo"),
         "Google News RSS": sum(1 for a in combined if a.get("search_source") == "Google News RSS"),
+        "Google CSE": sum(1 for a in combined if a.get("search_source") == "Google CSE"),
+        "Naver News": sum(1 for a in combined if a.get("search_source") == "Naver News"),
         "Gemini Search": sum(1 for a in combined if a.get("search_source") == "Gemini Search"),
     }
 
@@ -92,7 +148,7 @@ def search_all_sources(
 def _deduplicate(articles: list[dict]) -> list[dict]:
     """
     URL 정규화(Pass 1) 및 제목 fingerprint(Pass 2)로 중복을 제거합니다.
-    우선순위: DuckDuckGo > Google News RSS > Gemini Search
+    우선순위: DuckDuckGo > Google News RSS > Google CSE > Naver News > Gemini Search
     """
     # 소스 우선순위 순으로 정렬
     articles = sorted(articles, key=lambda a: _SOURCE_PRIORITY.get(a.get("search_source", ""), 99))

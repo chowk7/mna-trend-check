@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M&A 뉴스 요약기</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app">
+
+    <!-- ── Sidebar ──────────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span class="logo">📰</span>
+        <h1>M&amp;A 뉴스 요약기</h1>
+        <button id="settings-btn" class="icon-btn" title="설정">⚙️</button>
+      </div>
+
+      <!-- Search Settings -->
+      <section class="panel">
+        <p class="panel-title">검색 설정</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="start-date">시작 날짜</label>
+            <input type="date" id="start-date">
+          </div>
+          <div class="form-group">
+            <label for="end-date">종료 날짜</label>
+            <input type="date" id="end-date">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="max-results">최대 기사 수: <strong id="max-results-value">100</strong>건</label>
+          <input type="range" id="max-results" min="100" max="400" step="50" value="100">
+          <div class="source-per-sources">
+            <label class="checkbox-label">
+              <input type="checkbox" id="equal-per-source">
+              <span>소스별 동일 수 할당</span>
+            </label>
+          </div>
+        </div>
+
+        <p class="panel-subtitle">검색 소스 및 키워드</p>
+
+        <div class="source-list">
+          <details class="source-details" id="src-rss" open>
+            <summary class="source-summary">
+              <input type="checkbox" id="en-rss" checked onclick="event.stopPropagation()">
+              <span class="source-label">Google News RSS</span>
+            </summary>
+            <div class="source-body">
+              <textarea id="kw-rss" rows="2" placeholder="키워드 (비워두면 기본값 사용)"></textarea>
+            </div>
+          </details>
+
+          <details class="source-details" id="src-ddg" open>
+            <summary class="source-summary">
+              <input type="checkbox" id="en-ddg" checked onclick="event.stopPropagation()">
+              <span class="source-label">DuckDuckGo</span>
+            </summary>
+            <div class="source-body">
+              <textarea id="kw-ddg" rows="2" placeholder="키워드 (비워두면 기본값 사용)"></textarea>
+            </div>
+          </details>
+
+          <details class="source-details" id="src-cse">
+            <summary class="source-summary">
+              <input type="checkbox" id="en-cse" onclick="event.stopPropagation()">
+              <span class="source-label">Google CSE</span>
+              <span class="unavail-badge" id="badge-cse" style="display:none">(설정 필요)</span>
+            </summary>
+            <div class="source-body">
+              <textarea id="kw-cse" rows="2" placeholder="키워드 (비워두면 기본값 사용)"></textarea>
+            </div>
+          </details>
+
+          <details class="source-details" id="src-naver">
+            <summary class="source-summary">
+              <input type="checkbox" id="en-naver" onclick="event.stopPropagation()">
+              <span class="source-label">Naver 뉴스</span>
+              <span class="unavail-badge" id="badge-naver" style="display:none">(설정 필요)</span>
+            </summary>
+            <div class="source-body">
+              <textarea id="kw-naver" rows="2" placeholder="키워드 (비워두면 기본값 사용)"></textarea>
+            </div>
+          </details>
+        </div>
+
+        <div class="form-group" style="margin-top:8px">
+          <label class="checkbox-label">
+            <input type="checkbox" id="gemini-fallback" checked>
+            <span>Gemini 검색 폴백 사용</span>
+          </label>
+          <p class="hint">모든 소스에서 결과가 없을 때 Gemini로 추가 검색합니다.</p>
+        </div>
+
+        <button id="search-btn" class="btn btn-primary btn-full">🔍 뉴스 검색</button>
+      </section>
+
+      <!-- Summarize Settings -->
+      <section class="panel">
+        <p class="panel-title">요약 설정</p>
+
+        <div class="form-group">
+          <label for="model">Gemini 모델</label>
+          <select id="model"></select>
+        </div>
+
+        <details class="format-details">
+          <summary>요약 양식 편집</summary>
+          <div class="form-group format-group">
+            <textarea id="custom-format" rows="14"></textarea>
+          </div>
+        </details>
+
+        <button id="summarize-btn" class="btn btn-secondary btn-full" disabled>✨ 선택된 기사 요약</button>
+        <button id="download-btn" class="btn btn-outline btn-full" style="display:none">📥 전체 요약 다운로드</button>
+      </section>
+    </aside>
+
+    <!-- ── Main Content ─────────────────────────────────────── -->
+    <main class="content">
+
+      <!-- Empty state -->
+      <div id="empty-state" class="empty-state">
+        <div class="empty-icon">📰</div>
+        <p>검색 버튼을 눌러 M&amp;A 뉴스를 가져오세요.</p>
+      </div>
+
+      <!-- Results area -->
+      <div id="results" style="display:none">
+
+        <!-- Source counts -->
+        <div id="source-counts" class="source-counts" style="display:none"></div>
+
+        <!-- Article list header -->
+        <div class="articles-header">
+          <h2 id="articles-title">기사 목록</h2>
+          <div class="article-actions">
+            <button id="select-all-btn" class="btn btn-sm btn-outline">전체 선택</button>
+            <button id="deselect-all-btn" class="btn btn-sm btn-outline">전체 해제</button>
+          </div>
+        </div>
+
+        <div id="article-list" class="article-list"></div>
+      </div>
+
+      <!-- Manual input -->
+      <details id="manual-section" class="manual-section">
+        <summary class="manual-summary">
+          <span class="manual-icon">✏️</span>
+          URL / 기사 내용 직접 입력해서 요약
+        </summary>
+        <div class="manual-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="manual-title">제목 (선택)</label>
+              <input type="text" id="manual-title" placeholder="기사 제목">
+            </div>
+            <div class="form-group">
+              <label for="manual-url">URL (선택)</label>
+              <input type="url" id="manual-url" placeholder="https://...">
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="manual-content">기사 내용 <span class="required">*</span></label>
+            <textarea id="manual-content" rows="8" placeholder="요약할 기사 내용을 붙여넣으세요..."></textarea>
+          </div>
+          <div class="manual-actions">
+            <button id="manual-summarize-btn" class="btn btn-secondary">✨ 요약하기</button>
+            <span id="manual-status" class="manual-status"></span>
+          </div>
+        </div>
+      </details>
+
+      <!-- Progress bar -->
+      <div id="progress-section" style="display:none">
+        <div class="progress-header">
+          <span id="progress-text">요약 중...</span>
+        </div>
+        <div class="progress-bar">
+          <div id="progress-fill" class="progress-fill" style="width:0%"></div>
+        </div>
+      </div>
+
+      <!-- Summary results -->
+      <div id="summaries-section" style="display:none">
+        <h2 class="section-title">요약 결과</h2>
+        <div id="summary-list" class="summary-list"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ── Settings Modal ──────────────────────────────────────── -->
+  <div id="settings-modal" class="modal" style="display:none" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" id="settings-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title">⚙️ 소스 API 설정</h2>
+        <button id="settings-close-btn" class="modal-close" aria-label="닫기">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- GCS 상태 -->
+        <div id="gcs-status-bar" class="settings-notice" style="display:none"></div>
+
+        <!-- Google CSE -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="settings-badge badge-cse">CSE</span>
+            Google Custom Search
+          </div>
+          <div class="form-group">
+            <label for="s-cse-key">API Key</label>
+            <div class="input-row">
+              <input type="password" id="s-cse-key" autocomplete="off" placeholder="AIza...">
+              <button class="toggle-vis-btn" data-target="s-cse-key" title="표시/숨김">👁</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="s-cse-cx">Search Engine ID (CX)</label>
+            <input type="text" id="s-cse-cx" autocomplete="off" placeholder="017...">
+          </div>
+        </div>
+
+        <!-- Naver News -->
+        <div class="settings-section">
+          <div class="settings-section-title">
+            <span class="settings-badge badge-naver">Naver</span>
+            Naver 뉴스 OpenAPI
+          </div>
+          <div class="form-group">
+            <label for="s-naver-id">Client ID</label>
+            <input type="text" id="s-naver-id" autocomplete="off" placeholder="">
+          </div>
+          <div class="form-group">
+            <label for="s-naver-secret">Client Secret</label>
+            <div class="input-row">
+              <input type="password" id="s-naver-secret" autocomplete="off" placeholder="">
+              <button class="toggle-vis-btn" data-target="s-naver-secret" title="표시/숨김">👁</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span id="settings-save-status" class="save-status"></span>
+        <button id="settings-save-btn" class="btn btn-primary">💾 저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=4"></script>
+</body>
+</html>
